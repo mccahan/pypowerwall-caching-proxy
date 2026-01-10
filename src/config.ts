@@ -22,6 +22,15 @@ export class ConfigLoader {
     if (fs.existsSync(configPath)) {
       const configData = fs.readFileSync(configPath, 'utf-8');
       config = JSON.parse(configData);
+      
+      // Ensure required fields exist with defaults
+      if (!config.cache) {
+        config.cache = {
+          defaultTTL: 300,
+          defaultStaleTime: 60,
+          slowRequestTimeout: 5000
+        };
+      }
     } else {
       // Default configuration
       config = {
@@ -126,8 +135,11 @@ export class ConfigLoader {
     if (process.env.PROXY_PORT) {
       config.proxy.port = parseInt(process.env.PROXY_PORT);
     }
+    // Initialize or override debug from environment variable
     if (this.isDebugEnabled()) {
       config.proxy.debug = true;
+    } else if (config.proxy.debug === undefined) {
+      config.proxy.debug = false;
     }
 
     this.instance = config;
