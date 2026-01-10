@@ -84,7 +84,6 @@ export class ConfigLoader {
       },
       {
         path: '/version',
-        pollInterval: null,
         cacheTTL: 600,
         staleTime: 300,
       },
