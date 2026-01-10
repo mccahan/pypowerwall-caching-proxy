@@ -75,7 +75,19 @@ export class ConfigLoader {
         pollInterval: 5,
         cacheTTL: 30,
         staleTime: 5,
-      }
+      },
+      {
+        path: '/csv/v2',
+        pollInterval: 30,
+        cacheTTL: 60,
+        staleTime: 30,
+      },
+      {
+        path: '/version',
+        pollInterval: null,
+        cacheTTL: 600,
+        staleTime: 300,
+      },
     ];
 
     if (config.urlConfigs) {
