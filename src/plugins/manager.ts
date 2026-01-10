@@ -29,18 +29,16 @@ export class PluginManager {
   }
 
   async notifyResponse(path: string, data: any): Promise<void> {
-    // Call all plugins in parallel, but don't wait or fail if they error
-    const promises = this.plugins.map(async (plugin) => {
-      try {
-        await plugin.onResponse(path, data);
-      } catch (error) {
-        console.error(`Plugin ${plugin.name} error:`, error);
-        // Don't throw - plugins should not break the response flow
-      }
-    });
-
-    // Fire and forget - don't wait for plugins to complete
-    Promise.all(promises).catch((error) => {
+    // Call all plugins - fire and forget, don't wait or fail if they error
+    Promise.allSettled(
+      this.plugins.map(async (plugin) => {
+        try {
+          await plugin.onResponse(path, data);
+        } catch (error) {
+          console.error(`Plugin ${plugin.name} error:`, error);
+        }
+      })
+    ).catch((error) => {
       console.error('Plugin notification error:', error);
     });
   }

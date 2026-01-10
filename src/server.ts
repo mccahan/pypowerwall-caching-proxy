@@ -123,9 +123,6 @@ export class ProxyServer {
   async start(): Promise<void> {
     const config = ConfigLoader.get();
     
-    // Initialize plugins first
-    await this.pluginManager.initialize();
-    
     this.server = this.app.listen(config.proxy.port, () => {
       console.log(`Pypowerwall caching proxy listening on port ${config.proxy.port}`);
       console.log(`Backend URL: ${config.backend.url}`);
@@ -136,6 +133,11 @@ export class ProxyServer {
 
     // Start polling scheduler
     this.scheduler.start();
+    
+    // Initialize plugins in background (don't block server startup)
+    this.pluginManager.initialize().catch((error) => {
+      console.error('Plugin initialization error:', error);
+    });
   }
 
   async stop(): Promise<void> {
