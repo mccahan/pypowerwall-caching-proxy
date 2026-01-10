@@ -238,6 +238,13 @@ export class ProxyServer {
 
     // Poll every 2 seconds
     pollInterval = setInterval(updateStats, 2000);
+
+    // Clean up interval on page unload
+    window.addEventListener('beforeunload', () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    });
   </script>
 </body>
 </html>`);
