@@ -4,18 +4,21 @@ import { CacheManager } from './cache';
 import { PollingScheduler } from './scheduler';
 import { PluginManager } from './plugins';
 import { Logger } from './logger';
+import { ConnectionManager } from './connectionManager';
 
 export class ProxyServer {
   private app: express.Application;
   private cacheManager: CacheManager;
   private scheduler: PollingScheduler;
   private pluginManager: PluginManager;
+  private connectionManager: ConnectionManager;
   private server: any;
 
   constructor() {
     this.app = express();
     this.pluginManager = new PluginManager();
-    this.cacheManager = new CacheManager(this.pluginManager);
+    this.connectionManager = new ConnectionManager();
+    this.cacheManager = new CacheManager(this.pluginManager, this.connectionManager);
     this.scheduler = new PollingScheduler(this.cacheManager);
     this.setupMiddleware();
     this.setupRoutes();
@@ -53,6 +56,7 @@ export class ProxyServer {
         status: 'ok',
         timestamp: new Date().toISOString(),
         cache: this.cacheManager.getCacheStats(),
+        queue: this.cacheManager.getQueueStats(),
         activePolls: this.scheduler.getActivePolls()
       });
     });
@@ -67,6 +71,13 @@ export class ProxyServer {
       const stats = this.cacheManager.getCacheStats();
       res.setHeader('Content-Type', 'application/json');
       res.send(JSON.stringify(stats, null, 2));
+    });
+
+    // Connection queue endpoint
+    this.app.get('/queue/stats', (req: Request, res: Response) => {
+      const queueStats = this.cacheManager.getQueueStats();
+      res.setHeader('Content-Type', 'application/json');
+      res.send(JSON.stringify(queueStats, null, 2));
     });
 
     // Proxy all other requests
