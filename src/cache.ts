@@ -15,7 +15,7 @@ export class CacheManager {
   private connectionManager: ConnectionManager;
   
   // Maximum number of request durations to track per URL
-  private readonly MAX_TRACKED_DURATIONS = 5;
+  private readonly MAX_TRACKED_DURATIONS = 25;
 
   constructor(pluginManager: PluginManager, connectionManager: ConnectionManager) {
     const config = ConfigLoader.get();
