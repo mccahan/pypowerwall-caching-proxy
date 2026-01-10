@@ -5,6 +5,10 @@ import { Config } from './types';
 export class ConfigLoader {
   private static instance: Config | null = null;
 
+  private static isDebugEnabled(): boolean {
+    return process.env.DEBUG === 'true' || process.env.DEBUG === '1';
+  }
+
   static load(): Config {
     if (this.instance) {
       return this.instance;
@@ -26,7 +30,7 @@ export class ConfigLoader {
         },
         proxy: {
           port: parseInt(process.env.PROXY_PORT || '8676'),
-          debug: process.env.DEBUG === 'true' || process.env.DEBUG === '1'
+          debug: this.isDebugEnabled()
         },
         cache: {
           defaultTTL: parseInt(process.env.DEFAULT_TTL || '300'),
@@ -122,7 +126,7 @@ export class ConfigLoader {
     if (process.env.PROXY_PORT) {
       config.proxy.port = parseInt(process.env.PROXY_PORT);
     }
-    if (process.env.DEBUG === 'true' || process.env.DEBUG === '1') {
+    if (this.isDebugEnabled()) {
       config.proxy.debug = true;
     }
 
