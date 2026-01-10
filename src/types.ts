@@ -55,6 +55,7 @@ export interface Plugin {
   name: string;
   initialize(): Promise<void>;
   onResponse(path: string, data: any): Promise<void>;
+  shouldCache?(path: string, data: any): boolean;
   shutdown(): Promise<void>;
 }
 
