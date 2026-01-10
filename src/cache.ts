@@ -13,6 +13,9 @@ export class CacheManager {
   private cacheStats: Map<string, { hits: number; misses: number }> = new Map();
   private pluginManager: PluginManager;
   private connectionManager: ConnectionManager;
+  
+  // Maximum number of request durations to track per URL
+  private readonly MAX_TRACKED_DURATIONS = 5;
 
   constructor(pluginManager: PluginManager, connectionManager: ConnectionManager) {
     const config = ConfigLoader.get();
@@ -109,8 +112,8 @@ export class CacheManager {
     const existingEntry = this.cache.get(fullUrl);
     const existingDurations = existingEntry?.requestDurations || [];
     
-    // Keep only the last 5 durations, add the new one
-    const updatedDurations = [...existingDurations, durationMs].slice(-5);
+    // Keep only the last N durations, add the new one
+    const updatedDurations = [...existingDurations, durationMs].slice(-this.MAX_TRACKED_DURATIONS);
     
     return updatedDurations;
   }

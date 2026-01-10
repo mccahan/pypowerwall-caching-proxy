@@ -76,6 +76,11 @@ const App: React.FC = () => {
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
+  const formatSize = (bytes: number) => {
+    if (bytes > 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes} B`;
+  };
+
   const filteredCacheKeys = useMemo(() => {
     if (!cacheStats) return [];
     return (Object.entries(cacheStats.keys) as [string, CacheEntry][])
@@ -235,7 +240,7 @@ const App: React.FC = () => {
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-xs text-slate-600 font-medium">{info.size > 1024 ? `${(info.size / 1024).toFixed(1)} KB` : `${info.size} B`}</span>
+                            <span className="text-xs text-slate-600 font-medium">{formatSize(info.size)}</span>
                           </td>
                           <td className="px-6 py-4 text-right">
                             <span className="text-xs text-slate-400 font-medium">
