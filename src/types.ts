@@ -4,6 +4,7 @@ export interface BackendConfig {
 
 export interface ProxyConfig {
   port: number;
+  debug?: boolean;
 }
 
 export interface CacheConfig {

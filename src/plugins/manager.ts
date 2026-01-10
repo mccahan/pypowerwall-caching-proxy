@@ -1,6 +1,7 @@
 import { Plugin } from '../types';
 import { MqttPlugin } from './mqtt';
 import { ConfigLoader } from '../config';
+import { Logger } from '../logger';
 
 export class PluginManager {
   private plugins: Plugin[] = [];
@@ -14,18 +15,18 @@ export class PluginManager {
   }
 
   async initialize(): Promise<void> {
-    console.log('Initializing plugins...');
+    Logger.info('Initializing plugins...');
     
     for (const plugin of this.plugins) {
       try {
         await plugin.initialize();
       } catch (error) {
-        console.error(`Error initializing plugin ${plugin.name}:`, error);
+        Logger.error(`Error initializing plugin ${plugin.name}:`, error);
         // Continue with other plugins
       }
     }
     
-    console.log('Plugins initialized');
+    Logger.info('Plugins initialized');
   }
 
   async notifyResponse(path: string, data: any): Promise<void> {
@@ -35,23 +36,23 @@ export class PluginManager {
         try {
           await plugin.onResponse(path, data);
         } catch (error) {
-          console.error(`Plugin ${plugin.name} error:`, error);
+          Logger.error(`Plugin ${plugin.name} error:`, error);
         }
       })
     );
   }
 
   async shutdown(): Promise<void> {
-    console.log('Shutting down plugins...');
+    Logger.info('Shutting down plugins...');
     
     for (const plugin of this.plugins) {
       try {
         await plugin.shutdown();
       } catch (error) {
-        console.error(`Error shutting down plugin ${plugin.name}:`, error);
+        Logger.error(`Error shutting down plugin ${plugin.name}:`, error);
       }
     }
     
-    console.log('Plugins shut down');
+    Logger.info('Plugins shut down');
   }
 }

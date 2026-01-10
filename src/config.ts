@@ -25,7 +25,8 @@ export class ConfigLoader {
           url: process.env.BACKEND_URL || 'http://localhost:8675'
         },
         proxy: {
-          port: parseInt(process.env.PROXY_PORT || '8676')
+          port: parseInt(process.env.PROXY_PORT || '8676'),
+          debug: process.env.DEBUG === 'true' || process.env.DEBUG === '1'
         },
         cache: {
           defaultTTL: parseInt(process.env.DEFAULT_TTL || '300'),
@@ -120,6 +121,9 @@ export class ConfigLoader {
     }
     if (process.env.PROXY_PORT) {
       config.proxy.port = parseInt(process.env.PROXY_PORT);
+    }
+    if (process.env.DEBUG === 'true' || process.env.DEBUG === '1') {
+      config.proxy.debug = true;
     }
 
     this.instance = config;

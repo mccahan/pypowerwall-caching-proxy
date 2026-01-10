@@ -1,5 +1,6 @@
 import { ConfigLoader } from './config';
 import { CacheManager } from './cache';
+import { Logger } from './logger';
 
 export class PollingScheduler {
   private intervals: Map<string, NodeJS.Timeout> = new Map();
@@ -12,7 +13,7 @@ export class PollingScheduler {
   start(): void {
     const config = ConfigLoader.get();
     
-    console.log('Starting polling scheduler...');
+    Logger.info('Starting polling scheduler...');
     
     config.urlConfigs.forEach(urlConfig => {
       if (urlConfig.pollInterval && urlConfig.pollInterval > 0) {
@@ -20,11 +21,11 @@ export class PollingScheduler {
       }
     });
 
-    console.log(`Scheduled ${this.intervals.size} polling intervals`);
+    Logger.info(`Scheduled ${this.intervals.size} polling intervals`);
   }
 
   private schedulePolling(path: string, intervalSeconds: number): void {
-    console.log(`Scheduling polling for ${path} every ${intervalSeconds} seconds`);
+    Logger.debug(`Scheduling polling for ${path} every ${intervalSeconds} seconds`);
     
     // Initial poll
     this.poll(path);
@@ -39,19 +40,19 @@ export class PollingScheduler {
 
   private async poll(path: string): Promise<void> {
     try {
-      console.log(`Polling ${path}...`);
+      Logger.debug(`Polling ${path}...`);
       await this.cacheManager.fetchFromBackend(path, path);
-      console.log(`Successfully polled ${path}`);
+      Logger.debug(`Successfully polled ${path}`);
     } catch (error) {
-      console.error(`Error polling ${path}:`, error);
+      Logger.error(`Error polling ${path}:`, error);
     }
   }
 
   stop(): void {
-    console.log('Stopping polling scheduler...');
+    Logger.info('Stopping polling scheduler...');
     this.intervals.forEach((interval, path) => {
       clearInterval(interval);
-      console.log(`Stopped polling for ${path}`);
+      Logger.debug(`Stopped polling for ${path}`);
     });
     this.intervals.clear();
   }
