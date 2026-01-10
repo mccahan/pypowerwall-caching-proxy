@@ -41,7 +41,7 @@ export class PollingScheduler {
   private async poll(path: string): Promise<void> {
     try {
       Logger.debug(`Polling ${path}...`);
-      await this.cacheManager.fetchFromBackend(path, path);
+      await this.cacheManager.fetchFromBackend(path);
       Logger.debug(`Successfully polled ${path}`);
     } catch (error) {
       Logger.error(`Error polling ${path}:`, error);
