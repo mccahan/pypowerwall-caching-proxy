@@ -222,14 +222,14 @@ export class CacheManager {
         `(${backoffState?.consecutiveErrors} consecutive errors)`
       );
       
-      // Return stale cache if available during backoff
-      const staleCache = this.cache.get(path);
-      if (staleCache) {
-        Logger.debug(`Returning stale cache for ${path} during backoff`);
-        return staleCache;
+      // Return cache if available during backoff (even if stale, but not expired)
+      const cachedEntry = this.cache.get(path);
+      if (cachedEntry && this.isCacheValid(cachedEntry)) {
+        Logger.debug(`Returning cached data for ${path} during backoff`);
+        return cachedEntry;
       }
       
-      // No stale cache, throw BackoffError
+      // No valid cache, throw BackoffError
       throw new BackoffError(
         path,
         delay,
