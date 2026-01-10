@@ -39,6 +39,12 @@ export class PollingScheduler {
   }
 
   private async poll(path: string): Promise<void> {
+    // Skip polling if endpoint is in backoff
+    if (this.cacheManager.isEndpointInBackoff(path)) {
+      Logger.debug(`Skipping poll for ${path} (endpoint in backoff)`);
+      return;
+    }
+    
     try {
       Logger.debug(`Polling ${path}...`);
       await this.cacheManager.fetchFromBackend(path);
