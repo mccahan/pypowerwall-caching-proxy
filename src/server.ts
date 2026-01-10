@@ -4,18 +4,21 @@ import { CacheManager } from './cache';
 import { PollingScheduler } from './scheduler';
 import { PluginManager } from './plugins';
 import { Logger } from './logger';
+import { ConnectionManager } from './connectionManager';
 
 export class ProxyServer {
   private app: express.Application;
   private cacheManager: CacheManager;
   private scheduler: PollingScheduler;
   private pluginManager: PluginManager;
+  private connectionManager: ConnectionManager;
   private server: any;
 
   constructor() {
     this.app = express();
     this.pluginManager = new PluginManager();
-    this.cacheManager = new CacheManager(this.pluginManager);
+    this.connectionManager = new ConnectionManager();
+    this.cacheManager = new CacheManager(this.pluginManager, this.connectionManager);
     this.scheduler = new PollingScheduler(this.cacheManager);
     this.setupMiddleware();
     this.setupRoutes();
