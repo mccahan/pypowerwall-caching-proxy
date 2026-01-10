@@ -193,7 +193,7 @@ Response headers include:
 curl http://localhost:8676/health
 ```
 
-Returns proxy status, cache statistics, and active polls.
+Returns proxy status, cache statistics, connection queue status, and active polls.
 
 **Cache Statistics**
 ```bash
@@ -201,6 +201,16 @@ curl http://localhost:8676/cache/stats
 ```
 
 Returns current cache size and cached keys.
+
+**Queue Statistics**
+```bash
+curl http://localhost:8676/queue/stats
+```
+
+Returns current connection queue status, including:
+- `queueLength`: Number of requests waiting in queue
+- `isProcessing`: Whether a request is currently being processed
+- `queuedUrls`: Array of URLs waiting to be processed
 
 **Clear Cache**
 ```bash

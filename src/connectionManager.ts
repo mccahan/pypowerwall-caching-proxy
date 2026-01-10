@@ -142,6 +142,14 @@ export class ConnectionManager {
     return this.getErrorStats();
   }
 
+  getQueueStats(): { queueLength: number; isProcessing: boolean; queuedUrls: string[] } {
+    return {
+      queueLength: this.requestQueue.length,
+      isProcessing: this.isProcessing,
+      queuedUrls: this.requestQueue.map(req => req.fullUrl)
+    };
+  }
+
   /**
    * Fetch from backend with global request queueing.
    * Only one request is processed at a time to avoid overloading the backend.

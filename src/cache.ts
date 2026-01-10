@@ -194,6 +194,10 @@ export class CacheManager {
     return this.connectionManager.isEndpointInBackoff(fullUrl);
   }
 
+  getQueueStats(): { queueLength: number; isProcessing: boolean; queuedUrls: string[] } {
+    return this.connectionManager.getQueueStats();
+  }
+
   getCacheStats(): { 
     size: number; 
     keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }>;

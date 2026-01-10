@@ -56,6 +56,7 @@ export class ProxyServer {
         status: 'ok',
         timestamp: new Date().toISOString(),
         cache: this.cacheManager.getCacheStats(),
+        queue: this.cacheManager.getQueueStats(),
         activePolls: this.scheduler.getActivePolls()
       });
     });
@@ -70,6 +71,13 @@ export class ProxyServer {
       const stats = this.cacheManager.getCacheStats();
       res.setHeader('Content-Type', 'application/json');
       res.send(JSON.stringify(stats, null, 2));
+    });
+
+    // Connection queue endpoint
+    this.app.get('/queue/stats', (req: Request, res: Response) => {
+      const queueStats = this.cacheManager.getQueueStats();
+      res.setHeader('Content-Type', 'application/json');
+      res.send(JSON.stringify(queueStats, null, 2));
     });
 
     // Proxy all other requests
