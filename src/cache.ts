@@ -186,25 +186,25 @@ export class CacheManager {
     return { errorRate, errorRateByPath };
   }
 
-  async get(path: string, fullUrl: string): Promise<CacheEntry | null> {
-    const cached = this.cache.get(path);
+  async get(fullUrl: string): Promise<CacheEntry | null> {
+    const cached = this.cache.get(fullUrl);
 
     if (cached && this.isCacheValid(cached)) {
       // If stale but valid, queue for background update
-      if (this.isCacheStale(cached) && !this.staleUpdateQueue.has(path)) {
-        this.queueStaleUpdate(path, fullUrl);
+      if (this.isCacheStale(cached) && !this.staleUpdateQueue.has(fullUrl)) {
+        this.queueStaleUpdate(fullUrl);
       }
       // Increment hit counter
-      const stats = this.cacheStats.get(path) || { hits: 0, misses: 0 };
+      const stats = this.cacheStats.get(fullUrl) || { hits: 0, misses: 0 };
       stats.hits += 1;
-      this.cacheStats.set(path, stats);
+      this.cacheStats.set(fullUrl, stats);
       return cached;
     }
 
     // Increment miss counter
-    const stats = this.cacheStats.get(path) || { hits: 0, misses: 0 };
+    const stats = this.cacheStats.get(fullUrl) || { hits: 0, misses: 0 };
     stats.misses += 1;
-    this.cacheStats.set(path, stats);
+    this.cacheStats.set(fullUrl, stats);
 
     return null;
   }
@@ -220,50 +220,50 @@ export class CacheManager {
     this.cache.set(path, entry);
   }
 
-  private queueStaleUpdate(path: string, fullUrl: string): void {
-    this.staleUpdateQueue.add(path);
+  private queueStaleUpdate(fullUrl: string): void {
+    this.staleUpdateQueue.add(fullUrl);
 
     // Perform async update
     setImmediate(async () => {
       try {
-        await this.fetchFromBackend(path, fullUrl);
+        await this.fetchFromBackend(fullUrl);
       } catch (error) {
-        Logger.error(`Error updating stale cache for ${path}:`, error);
+        Logger.error(`Error updating stale cache for ${fullUrl}:`, error);
       } finally {
-        this.staleUpdateQueue.delete(path);
+        this.staleUpdateQueue.delete(fullUrl);
       }
     });
   }
 
-  async fetchFromBackend(path: string, fullUrl: string): Promise<CacheEntry> {
+  async fetchFromBackend(fullUrl: string): Promise<CacheEntry> {
     // Check if endpoint is in backoff
-    if (this.isInBackoff(path)) {
-      const delay = this.getBackoffDelay(path);
-      const backoffState = this.backoffStates.get(path);
+    if (this.isInBackoff(fullUrl)) {
+      const delay = this.getBackoffDelay(fullUrl);
+      const backoffState = this.backoffStates.get(fullUrl);
       Logger.debug(
-        `Endpoint ${path} is in backoff for ${delay}ms ` +
+        `Endpoint ${fullUrl} is in backoff for ${delay}ms ` +
         `(${backoffState?.consecutiveErrors} consecutive errors)`
       );
       
       // Return cache if available and valid during backoff
       // Note: We intentionally serve stale cache during backoff as long as it's within TTL,
       // since the backend is failing and any data is better than none
-      const cachedEntry = this.cache.get(path);
+      const cachedEntry = this.cache.get(fullUrl);
       if (cachedEntry && this.isCacheValid(cachedEntry)) {
-        Logger.debug(`Returning cached data for ${path} during backoff`);
+        Logger.debug(`Returning cached data for ${fullUrl} during backoff`);
         return cachedEntry;
       }
       
       // No valid cache, throw BackoffError
       throw new BackoffError(
-        path,
+        fullUrl,
         delay,
         backoffState?.consecutiveErrors || 0
       );
     }
     
     // Check if there's already a pending request for this URL
-    const pending = this.pendingRequests.get(path);
+    const pending = this.pendingRequests.get(fullUrl);
     if (pending) {
       return pending.promise;
     }
@@ -288,17 +288,17 @@ export class CacheManager {
           data: response.data,
           headers,
           timestamp: Date.now(),
-          ttl: this.getCacheTTL(path),
-          staleTime: this.getStaleTime(path)
+          ttl: this.getCacheTTL(fullUrl),
+          staleTime: this.getStaleTime(fullUrl)
         };
 
-        this.cache.set(path, entry);
+        this.cache.set(fullUrl, entry);
         
         // Record successful request (resets backoff)
-        this.recordSuccess(path);
+        this.recordSuccess(fullUrl);
         
         // Notify plugins about the response (fire and forget)
-        this.pluginManager.notifyResponse(path, response.data);
+        this.pluginManager.notifyResponse(fullUrl, response.data);
         
         return entry;
       } catch (error) {
@@ -306,15 +306,15 @@ export class CacheManager {
         Logger.error(`Error fetching from backend ${backendUrl}:`, axiosError.message);
         
         // Record error for backoff tracking
-        this.recordError(path);
+        this.recordError(fullUrl);
         
         throw error;
       } finally {
-        this.pendingRequests.delete(path);
+        this.pendingRequests.delete(fullUrl);
       }
     })();
 
-    this.pendingRequests.set(path, {
+    this.pendingRequests.set(fullUrl, {
       promise: requestPromise,
       timestamp: Date.now()
     });
@@ -322,9 +322,9 @@ export class CacheManager {
     return requestPromise;
   }
 
-  async getOrFetch(path: string, fullUrl: string, timeout?: number): Promise<{ entry: CacheEntry | null; fromCache: boolean }> {
+  async getOrFetch(fullUrl: string, timeout?: number): Promise<{ entry: CacheEntry | null; fromCache: boolean }> {
     // Check cache first
-    const cached = await this.get(path, fullUrl);
+    const cached = await this.get(fullUrl);
     if (cached) {
       return { entry: cached, fromCache: true };
     }
@@ -334,30 +334,30 @@ export class CacheManager {
 
     try {
       const entry = await Promise.race([
-        this.fetchFromBackend(path, fullUrl),
+        this.fetchFromBackend(fullUrl),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), slowTimeout))
       ]);
 
       if (entry === null) {
         // Request took too long, check if we have stale cache
-        const staleCache = this.cache.get(path);
+        const staleCache = this.cache.get(fullUrl);
         if (staleCache) {
-          Logger.debug(`Slow request for ${path}, returning stale cache`);
+          Logger.debug(`Slow request for ${fullUrl}, returning stale cache`);
           return { entry: staleCache, fromCache: true };
         }
 
         // No stale cache available, wait for the actual request
-        Logger.debug(`Slow request for ${path}, no stale cache available, waiting...`);
-        const actualEntry = await this.fetchFromBackend(path, fullUrl);
+        Logger.debug(`Slow request for ${fullUrl}, no stale cache available, waiting...`);
+        const actualEntry = await this.fetchFromBackend(fullUrl);
         return { entry: actualEntry, fromCache: false };
       }
 
       return { entry, fromCache: false };
     } catch (error) {
       // On error, try to return stale cache if available
-      const staleCache = this.cache.get(path);
+      const staleCache = this.cache.get(fullUrl);
       if (staleCache) {
-        Logger.debug(`Error fetching ${path}, returning stale cache`);
+        Logger.debug(`Error fetching ${fullUrl}, returning stale cache`);
         return { entry: staleCache, fromCache: true };
       }
       throw error;
@@ -368,8 +368,8 @@ export class CacheManager {
     this.cache.clear();
   }
 
-  isEndpointInBackoff(path: string): boolean {
-    return this.isInBackoff(path);
+  isEndpointInBackoff(fullUrl: string): boolean {
+    return this.isInBackoff(fullUrl);
   }
 
   getCacheStats(): { 

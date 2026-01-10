@@ -80,7 +80,7 @@ export class ProxyServer {
         // Only handle GET requests with caching
         if (req.method !== 'GET') {
           // For non-GET requests, always forward to backend
-          const result = await this.cacheManager.fetchFromBackend(path, fullUrl);
+          const result = await this.cacheManager.fetchFromBackend(fullUrl);
           
           // Set headers
           Object.keys(result.headers).forEach(key => {
@@ -91,7 +91,7 @@ export class ProxyServer {
         }
 
         // GET request - use cache
-        const { entry, fromCache } = await this.cacheManager.getOrFetch(path, fullUrl);
+        const { entry, fromCache } = await this.cacheManager.getOrFetch(fullUrl);
 
         if (!entry) {
           return res.status(503).json({ error: 'Service unavailable' });
