@@ -22,6 +22,11 @@ export class ProxyServer {
     this.app.use((req: Request, res: Response, next: NextFunction) => {
       const start = Date.now();
       res.on('finish', () => {
+        // Don't log favicon requests
+        if (req.path === '/favicon.ico') {
+          return;
+        }
+
         const duration = Date.now() - start;
         console.log(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
       });
@@ -33,6 +38,11 @@ export class ProxyServer {
   }
 
   private setupRoutes(): void {
+    // Ignore requests to favicon.ico
+    this.app.get('/favicon.ico', (req: Request, res: Response) => {
+      res.status(204).end();
+    });
+
     // Health check endpoint
     this.app.get('/health', (req: Request, res: Response) => {
       res.json({
@@ -50,7 +60,9 @@ export class ProxyServer {
     });
 
     this.app.get('/cache/stats', (req: Request, res: Response) => {
-      res.json(this.cacheManager.getCacheStats());
+      const stats = this.cacheManager.getCacheStats();
+      res.setHeader('Content-Type', 'application/json');
+      res.send(JSON.stringify(stats, null, 2));
     });
 
     // Proxy all other requests
@@ -93,7 +105,8 @@ export class ProxyServer {
           }
         });
 
-        res.json(entry.data);
+        res.setHeader('Content-Type', 'application/json');
+        res.send(JSON.stringify(entry.data, null, 2));
       } catch (error) {
         console.error('Error handling request:', error);
         res.status(500).json({ 
