@@ -31,7 +31,7 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 
 # Copy example config (can be overridden with volume mount)
-COPY config.example.json ./config.json
+COPY config.* /app/
 
 # Expose default proxy port
 EXPOSE 8676
