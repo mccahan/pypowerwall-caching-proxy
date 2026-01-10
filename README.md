@@ -211,6 +211,14 @@ Returns current connection queue status, including:
 - `queueLength`: Number of requests waiting in queue
 - `isProcessing`: Whether a request is currently being processed
 - `queuedUrls`: Array of URLs waiting to be processed
+- `currentProcessingUrl`: The URL currently being processed (null if none)
+- `currentProcessingWaitTimeMs`: How long the current request has been processing (null if none)
+- `recentlyCompleted`: Array of the last 20 completed requests with their runtimes, containing:
+  - `fullUrl`: The URL that was processed
+  - `startTime`: When the request started processing (Unix timestamp)
+  - `endTime`: When the request finished processing (Unix timestamp)
+  - `runtimeMs`: How long the request took to complete in milliseconds
+  - `success`: Whether the request completed successfully
 
 **Clear Cache**
 ```bash

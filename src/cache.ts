@@ -197,7 +197,20 @@ export class CacheManager {
     return this.connectionManager.isEndpointInBackoff(fullUrl);
   }
 
-  getQueueStats(): { queueLength: number; isProcessing: boolean; queuedUrls: string[] } {
+  getQueueStats(): { 
+    queueLength: number; 
+    isProcessing: boolean; 
+    queuedUrls: string[];
+    currentProcessingUrl: string | null;
+    currentProcessingWaitTimeMs: number | null;
+    recentlyCompleted: Array<{
+      fullUrl: string;
+      startTime: number;
+      endTime: number;
+      runtimeMs: number;
+      success: boolean;
+    }>;
+  } {
     return this.connectionManager.getQueueStats();
   }
 

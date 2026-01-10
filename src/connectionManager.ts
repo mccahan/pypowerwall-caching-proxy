@@ -12,12 +12,27 @@ interface QueuedRequest {
   fullUrl: string;
   resolve: (result: FetchResult) => void;
   reject: (error: any) => void;
+  queuedAt: number;
+}
+
+interface CompletedRequest {
+  fullUrl: string;
+  startTime: number;
+  endTime: number;
+  runtimeMs: number;
+  success: boolean;
 }
 
 export class ConnectionManager {
   // Global request queue - only one request at a time
   private requestQueue: QueuedRequest[] = [];
   private isProcessing: boolean = false;
+  private currentProcessingUrl: string | null = null;
+  private currentProcessingStartTime: number | null = null;
+  
+  // Track recently completed requests (last 20)
+  private recentlyCompleted: CompletedRequest[] = [];
+  private readonly MAX_RECENT_REQUESTS = 20;
   
   // Backoff state tracking
   private backoffStates: Map<string, BackoffState> = new Map();
@@ -142,11 +157,29 @@ export class ConnectionManager {
     return this.getErrorStats();
   }
 
-  getQueueStats(): { queueLength: number; isProcessing: boolean; queuedUrls: string[] } {
+  getQueueStats(): { 
+    queueLength: number; 
+    isProcessing: boolean; 
+    queuedUrls: string[];
+    currentProcessingUrl: string | null;
+    currentProcessingWaitTimeMs: number | null;
+    recentlyCompleted: Array<{
+      fullUrl: string;
+      startTime: number;
+      endTime: number;
+      runtimeMs: number;
+      success: boolean;
+    }>;
+  } {
     return {
       queueLength: this.requestQueue.length,
       isProcessing: this.isProcessing,
-      queuedUrls: this.requestQueue.map(req => req.fullUrl)
+      queuedUrls: this.requestQueue.map(req => req.fullUrl),
+      currentProcessingUrl: this.currentProcessingUrl,
+      currentProcessingWaitTimeMs: this.currentProcessingStartTime 
+        ? Date.now() - this.currentProcessingStartTime 
+        : null,
+      recentlyCompleted: [...this.recentlyCompleted]
     };
   }
 
@@ -171,9 +204,9 @@ export class ConnectionManager {
       );
     }
 
-    // Add request to queue
+    // Add request to queue with timestamp
     return new Promise<FetchResult>((resolve, reject) => {
-      this.requestQueue.push({ fullUrl, resolve, reject });
+      this.requestQueue.push({ fullUrl, resolve, reject, queuedAt: Date.now() });
       this.processQueue();
     });
   }
@@ -191,16 +224,47 @@ export class ConnectionManager {
       // Process requests one at a time
       let request = this.requestQueue.shift();
       while (request) {
+        // Track current processing request
+        this.currentProcessingUrl = request.fullUrl;
+        this.currentProcessingStartTime = Date.now();
+        const startTime = this.currentProcessingStartTime;
+        
+        let success = false;
         try {
           const result = await this.executeRequest(request.fullUrl);
           request.resolve(result);
+          success = true;
         } catch (error) {
           request.reject(error);
+        } finally {
+          const endTime = Date.now();
+          const runtimeMs = endTime - startTime;
+          
+          // Record completed request
+          this.recentlyCompleted.unshift({
+            fullUrl: request.fullUrl,
+            startTime,
+            endTime,
+            runtimeMs,
+            success
+          });
+          
+          // Keep only the most recent requests
+          if (this.recentlyCompleted.length > this.MAX_RECENT_REQUESTS) {
+            this.recentlyCompleted = this.recentlyCompleted.slice(0, this.MAX_RECENT_REQUESTS);
+          }
+          
+          // Clear current processing tracking
+          this.currentProcessingUrl = null;
+          this.currentProcessingStartTime = null;
         }
+        
         request = this.requestQueue.shift();
       }
     } finally {
       this.isProcessing = false;
+      this.currentProcessingUrl = null;
+      this.currentProcessingStartTime = null;
     }
   }
 
