@@ -44,6 +44,7 @@ export interface CacheEntry {
   timestamp: number;
   ttl: number;
   staleTime: number;
+  requestDurations?: number[]; // Track last 5 successful request durations in ms
 }
 
 export interface PendingRequest {

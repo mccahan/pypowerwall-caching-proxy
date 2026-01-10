@@ -9,6 +9,7 @@ export interface CacheEntry {
   hits: number;
   misses: number;
   lastFetchTime: number;
+  avgResponseTime?: number;
 }
 
 export interface CacheStats {
