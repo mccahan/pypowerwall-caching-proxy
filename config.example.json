@@ -1,0 +1,39 @@
+{
+  "backend": {
+    "url": "http://localhost:8675",
+    "comment": "Backend pypowerwall server URL"
+  },
+  "proxy": {
+    "port": 8676,
+    "comment": "Port for the caching proxy to listen on"
+  },
+  "cache": {
+    "defaultTTL": 300,
+    "defaultStaleTime": 60,
+    "slowRequestTimeout": 5000,
+    "comment": "Default cache settings in seconds (TTL/staleTime) and milliseconds (timeout)"
+  },
+  "urlConfigs": [
+    {
+      "path": "/api/status",
+      "pollInterval": 10,
+      "cacheTTL": 30,
+      "staleTime": 10,
+      "comment": "Poll status every 10 seconds, cache for 30s, consider stale after 10s"
+    },
+    {
+      "path": "/api/meter",
+      "pollInterval": 5,
+      "cacheTTL": 15,
+      "staleTime": 5,
+      "comment": "Poll meter data frequently"
+    },
+    {
+      "path": "/api/soe",
+      "pollInterval": 60,
+      "cacheTTL": 120,
+      "staleTime": 30,
+      "comment": "State of energy, less frequent updates"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  proxy:
+    build: .
+    ports:
+      - "8676:8676"
+    environment:
+      - BACKEND_URL=http://pypowerwall:8675
+      - PROXY_PORT=8676
+      - DEFAULT_TTL=300
+      - DEFAULT_STALE_TIME=60
+      - SLOW_REQUEST_TIMEOUT=5000
+    volumes:
+      - ./config.json:/app/config.json:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8676/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Example pypowerwall service (commented out - replace with your actual service)
+  # pypowerwall:
+  #   image: your-pypowerwall-image
+  #   ports:
+  #     - "8675:8675"
