@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Activity, 
@@ -52,7 +51,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 2000);
+    const interval = setInterval(fetchStats, 1000);
     return () => clearInterval(interval);
   }, [fetchStats]);
 
@@ -85,7 +84,7 @@ const App: React.FC = () => {
     if (!cacheStats) return [];
     return (Object.entries(cacheStats.keys) as [string, CacheEntry][])
       .filter(([key]) => key.toLowerCase().includes(searchQuery.toLowerCase()))
-      .sort((a, b) => b[1].lastFetchTime - a[1].lastFetchTime);
+      .sort((a, b) => a[0].localeCompare(b[0])); // Sort by key in ascending order
   }, [cacheStats, searchQuery]);
 
   if (loading && !cacheStats) {
