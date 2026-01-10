@@ -38,9 +38,7 @@ export class PluginManager {
           console.error(`Plugin ${plugin.name} error:`, error);
         }
       })
-    ).catch((error) => {
-      console.error('Plugin notification error:', error);
-    });
+    );
   }
 
   async shutdown(): Promise<void> {

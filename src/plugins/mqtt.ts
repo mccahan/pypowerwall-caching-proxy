@@ -21,7 +21,7 @@ export class MqttPlugin implements Plugin {
     // Check environment variables first, then config
     this.host = process.env.MQTT_HOST || config?.host || '';
     const portEnv = process.env.MQTT_PORT;
-    this.port = (portEnv && portEnv !== '' ? parseInt(portEnv, 10) : undefined) || config?.port || 1883;
+    this.port = parseInt(portEnv || '', 10) || config?.port || 1883;
     this.username = process.env.MQTT_USER || config?.username;
     this.password = process.env.MQTT_PASSWORD || config?.password;
     this.prefix = process.env.MQTT_PREFIX || config?.prefix || 'pypowerwall/';
