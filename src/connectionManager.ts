@@ -189,18 +189,15 @@ export class ConnectionManager {
 
     try {
       // Process requests one at a time
-      while (this.requestQueue.length > 0) {
-        const request = this.requestQueue.shift();
-        if (!request) {
-          break;
-        }
-
+      let request = this.requestQueue.shift();
+      while (request) {
         try {
           const result = await this.executeRequest(request.fullUrl);
           request.resolve(result);
         } catch (error) {
           request.reject(error);
         }
+        request = this.requestQueue.shift();
       }
     } finally {
       this.isProcessing = false;
@@ -212,9 +209,13 @@ export class ConnectionManager {
     const backendUrl = `${config.backend.url}${fullUrl}`;
 
     try {
+      // Note: We accept all non-5xx responses (including 4xx) because:
+      // - 4xx errors represent valid responses from the backend (e.g., 404 Not Found, 401 Unauthorized)
+      // - These should be cached and returned to the client as-is
+      // - Only 5xx errors indicate backend failures that should trigger backoff
       const response = await axios.get(backendUrl, {
         timeout: 30000,
-        validateStatus: (status: number) => status < 500 // Accept all non-5xx responses
+        validateStatus: (status: number) => status < 500
       });
 
       const headers: Record<string, string> = {};

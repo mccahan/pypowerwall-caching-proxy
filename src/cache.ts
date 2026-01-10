@@ -131,6 +131,9 @@ export class CacheManager {
         this.pluginManager.notifyResponse(fullUrl, result.data);
         
         return entry;
+      } catch (error) {
+        // Re-throw error so it propagates to waiting callers
+        throw error;
       } finally {
         this.pendingRequests.delete(fullUrl);
       }
