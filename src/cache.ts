@@ -163,6 +163,29 @@ export class CacheManager {
     return errorRates;
   }
 
+  private getErrorStats(): { errorRate: number; errorRateByPath: Record<string, number> } {
+    const now = Date.now();
+    const recentErrors = this.errorEvents.filter(
+      event => now - event.timestamp < this.ERROR_WINDOW_MS
+    );
+    
+    // Calculate overall rate
+    const errorRate = recentErrors.length / this.ERROR_WINDOW_MINUTES;
+    
+    // Calculate per-path rates
+    const errorCounts: Record<string, number> = {};
+    recentErrors.forEach(event => {
+      errorCounts[event.path] = (errorCounts[event.path] || 0) + 1;
+    });
+    
+    const errorRateByPath: Record<string, number> = {};
+    Object.keys(errorCounts).forEach(path => {
+      errorRateByPath[path] = errorCounts[path] / this.ERROR_WINDOW_MINUTES;
+    });
+    
+    return { errorRate, errorRateByPath };
+  }
+
   async get(path: string, fullUrl: string): Promise<CacheEntry | null> {
     const cached = this.cache.get(path);
 
@@ -222,7 +245,9 @@ export class CacheManager {
         `(${backoffState?.consecutiveErrors} consecutive errors)`
       );
       
-      // Return cache if available during backoff (even if stale, but not expired)
+      // Return cache if available and valid during backoff
+      // Note: We intentionally serve stale cache during backoff as long as it's within TTL,
+      // since the backend is failing and any data is better than none
       const cachedEntry = this.cache.get(path);
       if (cachedEntry && this.isCacheValid(cachedEntry)) {
         Logger.debug(`Returning cached data for ${path} during backoff`);
@@ -363,6 +388,8 @@ export class CacheManager {
       };
     });
     
+    const { errorRate, errorRateByPath } = this.getErrorStats();
+    
     return {
       size: this.cache.size,
       keys: Array.from(this.cache.entries()).reduce((acc, [key, entry]) => {
@@ -375,8 +402,8 @@ export class CacheManager {
         };
         return acc;
       }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }>),
-      errorRate: this.getErrorRate(),
-      errorRateByPath: this.getErrorRateByPath(),
+      errorRate,
+      errorRateByPath,
       backoffStates: backoffStatesObj
     };
   }
