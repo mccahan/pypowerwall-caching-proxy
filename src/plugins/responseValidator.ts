@@ -1,14 +1,21 @@
-import { Logger } from './logger';
+import { Plugin } from '../types';
+import { Logger } from '../logger';
 
 // Minimum number of commas expected in a valid CSV response
 const MIN_CSV_COMMAS = 4;
 
-export class ResponseValidator {
-  /**
-   * Validates backend responses before they are cached.
-   * Returns true if the response is valid and should be cached, false otherwise.
-   */
-  static validate(path: string, data: any): boolean {
+export class ResponseValidatorPlugin implements Plugin {
+  name = 'response-validator';
+
+  async initialize(): Promise<void> {
+    Logger.info('Response validator plugin initialized');
+  }
+
+  async onResponse(path: string, data: any): Promise<void> {
+    // This plugin doesn't need to do anything on response
+  }
+
+  shouldCache(path: string, data: any): boolean {
     // JSON endpoints that should not be null
     const jsonEndpoints = ['/aggregates', '/soe', '/strings', '/freq', '/fans/pw', '/version'];
     
@@ -25,7 +32,7 @@ export class ResponseValidator {
     return true;
   }
 
-  private static validateJsonEndpoint(path: string, data: any): boolean {
+  private validateJsonEndpoint(path: string, data: any): boolean {
     // Check if data is null or undefined
     if (data == null) {
       Logger.debug(`Response validation failed for ${path}: data is null or undefined`);
@@ -49,7 +56,7 @@ export class ResponseValidator {
     return true;
   }
 
-  private static validateCsvEndpoint(path: string, data: any): boolean {
+  private validateCsvEndpoint(path: string, data: any): boolean {
     // CSV should be a string
     if (typeof data !== 'string') {
       Logger.debug(`Response validation failed for ${path}: data is not a string (type: ${typeof data})`);
@@ -65,5 +72,9 @@ export class ResponseValidator {
 
     Logger.debug(`Response validation passed for ${path}: ${commaCount} commas found`);
     return true;
+  }
+
+  async shutdown(): Promise<void> {
+    // No cleanup needed
   }
 }
