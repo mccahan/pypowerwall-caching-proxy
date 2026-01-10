@@ -7,6 +7,8 @@ export class CacheManager {
   private pendingRequests: Map<string, PendingRequest> = new Map();
   private staleUpdateQueue: Set<string> = new Set();
   private urlConfigs: Map<string, UrlConfig> = new Map();
+  // Add a new Map to track cache hits and misses
+  private cacheStats: Map<string, { hits: number; misses: number }> = new Map();
 
   constructor() {
     const config = ConfigLoader.get();
@@ -14,6 +16,8 @@ export class CacheManager {
     config.urlConfigs.forEach(urlConfig => {
       this.urlConfigs.set(urlConfig.path, urlConfig);
     });
+    // Initialize cacheStats
+    this.cacheStats = new Map();
   }
 
   private getUrlConfig(path: string): UrlConfig | undefined {
@@ -48,14 +52,23 @@ export class CacheManager {
 
   async get(path: string, fullUrl: string): Promise<CacheEntry | null> {
     const cached = this.cache.get(path);
-    
+
     if (cached && this.isCacheValid(cached)) {
       // If stale but valid, queue for background update
       if (this.isCacheStale(cached) && !this.staleUpdateQueue.has(path)) {
         this.queueStaleUpdate(path, fullUrl);
       }
+      // Increment hit counter
+      const stats = this.cacheStats.get(path) || { hits: 0, misses: 0 };
+      stats.hits += 1;
+      this.cacheStats.set(path, stats);
       return cached;
     }
+
+    // Increment miss counter
+    const stats = this.cacheStats.get(path) || { hits: 0, misses: 0 };
+    stats.misses += 1;
+    this.cacheStats.set(path, stats);
 
     return null;
   }
@@ -73,7 +86,7 @@ export class CacheManager {
 
   private queueStaleUpdate(path: string, fullUrl: string): void {
     this.staleUpdateQueue.add(path);
-    
+
     // Perform async update
     setImmediate(async () => {
       try {
@@ -145,7 +158,7 @@ export class CacheManager {
 
     // No valid cache, fetch from backend
     const slowTimeout = timeout || ConfigLoader.get().cache.slowRequestTimeout;
-    
+
     try {
       const entry = await Promise.race([
         this.fetchFromBackend(path, fullUrl),
@@ -159,7 +172,7 @@ export class CacheManager {
           console.log(`Slow request for ${path}, returning stale cache`);
           return { entry: staleCache, fromCache: true };
         }
-        
+
         // No stale cache available, wait for the actual request
         console.log(`Slow request for ${path}, no stale cache available, waiting...`);
         const actualEntry = await this.fetchFromBackend(path, fullUrl);
@@ -182,10 +195,19 @@ export class CacheManager {
     this.cache.clear();
   }
 
-  getCacheStats(): { size: number; keys: string[] } {
+  getCacheStats(): { size: number; keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }> } {
     return {
       size: this.cache.size,
-      keys: Array.from(this.cache.keys())
+      keys: Array.from(this.cache.entries()).reduce((acc, [key, entry]) => {
+        const stats = this.cacheStats.get(key) || { hits: 0, misses: 0 };
+        acc[key] = {
+          lastFetchTime: entry.timestamp,
+          size: JSON.stringify(entry.data).length,
+          hits: stats.hits,
+          misses: stats.misses
+        };
+        return acc;
+      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }>)
     };
   }
 }
