@@ -34,13 +34,72 @@ export class ConfigLoader {
         },
         urlConfigs: [
           {
-            "path": "/aggregates",
-            "pollInterval": 5,
-            "cacheTTL": 30,
-            "staleTime": 10,
+            path: '/aggregates',
+            pollInterval: 5,
+            cacheTTL: 30,
+            staleTime: 10,
           },
         ]
       };
+    }
+
+    // Merge default urlConfigs with config.json urlConfigs
+    const defaultUrlConfigs = [
+      {
+        path: '/aggregates',
+        pollInterval: 5,
+        cacheTTL: 30,
+        staleTime: 5,
+      },
+      {
+        path: '/soe',
+        pollInterval: 10,
+        cacheTTL: 30,
+        staleTime: 5,
+      },
+      {
+        path: '/strings',
+        pollInterval: 5,
+        cacheTTL: 30,
+        staleTime: 5,
+      },
+      {
+        path: '/freq',
+        pollInterval: 5,
+        cacheTTL: 30,
+        staleTime: 5,
+      },
+      {
+        path: '/fans/pw',
+        pollInterval: 5,
+        cacheTTL: 30,
+        staleTime: 5,
+      }
+    ];
+
+    if (config.urlConfigs) {
+      const mergedUrlConfigs = [...defaultUrlConfigs];
+      for (const customConfig of config.urlConfigs) {
+        const existingConfigIndex = mergedUrlConfigs.findIndex(
+          (defaultConfig) => defaultConfig.path === customConfig.path
+        );
+        if (existingConfigIndex !== -1) {
+          mergedUrlConfigs[existingConfigIndex] = {
+            ...mergedUrlConfigs[existingConfigIndex],
+            ...customConfig,
+          };
+        } else {
+          mergedUrlConfigs.push({
+            ...customConfig,
+            pollInterval: customConfig.pollInterval ?? 5,
+            cacheTTL: customConfig.cacheTTL ?? 30,
+            staleTime: customConfig.staleTime ?? 10,
+          });
+        }
+      }
+      config.urlConfigs = mergedUrlConfigs;
+    } else {
+      config.urlConfigs = defaultUrlConfigs;
     }
 
     // Override with environment variables if present
