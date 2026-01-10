@@ -263,8 +263,6 @@ export class ConnectionManager {
       }
     } finally {
       this.isProcessing = false;
-      this.currentProcessingUrl = null;
-      this.currentProcessingStartTime = null;
     }
   }
 
