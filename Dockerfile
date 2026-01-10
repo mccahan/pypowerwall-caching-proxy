@@ -18,10 +18,10 @@ RUN npm run build
 
 # Build dashboard static files
 FROM node:20-alpine AS dashboard-builder
-WORKDIR /dashboard
-COPY dashboard/package*.json ./
+WORKDIR /app
+COPY dashboard-ui/package*.json ./
 RUN npm ci
-COPY dashboard/ ./
+COPY dashboard-ui/ ./
 RUN npm run build
 
 # Production stage
@@ -39,7 +39,7 @@ RUN npm ci --only=production
 COPY --from=builder /app/dist ./dist
 
 # Copy built dashboard from dashboard-builder
-COPY --from=dashboard-builder /dashboard/build ./dashboard
+COPY --from=dashboard-builder /app/dist ./dashboard
 
 # Copy example config (can be overridden with volume mount)
 COPY config.* /app/
