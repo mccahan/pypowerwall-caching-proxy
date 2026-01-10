@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { CacheEntry, PendingRequest, UrlConfig } from './types';
+import { CacheEntry, PendingRequest, UrlConfig, BackoffState, ErrorEvent } from './types';
 import { ConfigLoader } from './config';
 import { PluginManager } from './plugins';
 import { Logger } from './logger';
@@ -12,6 +12,16 @@ export class CacheManager {
   // Add a new Map to track cache hits and misses
   private cacheStats: Map<string, { hits: number; misses: number }> = new Map();
   private pluginManager: PluginManager;
+  
+  // Backoff state tracking
+  private backoffStates: Map<string, BackoffState> = new Map();
+  private readonly INITIAL_BACKOFF_DELAY = 5000; // 5 seconds
+  private readonly MAX_BACKOFF_DELAY = 300000; // 5 minutes
+  private readonly BACKOFF_MULTIPLIER = 2;
+  
+  // Error rate tracking (10-minute window)
+  private errorEvents: ErrorEvent[] = [];
+  private readonly ERROR_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 
   constructor(pluginManager: PluginManager) {
     const config = ConfigLoader.get();
@@ -52,6 +62,104 @@ export class CacheManager {
   private isCacheStale(entry: CacheEntry): boolean {
     const now = Date.now();
     return (now - entry.timestamp) >= entry.staleTime;
+  }
+
+  private isInBackoff(path: string): boolean {
+    const backoffState = this.backoffStates.get(path);
+    if (!backoffState) {
+      return false;
+    }
+    return Date.now() < backoffState.nextRetryTime;
+  }
+
+  private getBackoffDelay(path: string): number {
+    const backoffState = this.backoffStates.get(path);
+    if (!backoffState) {
+      return 0;
+    }
+    return Math.max(0, backoffState.nextRetryTime - Date.now());
+  }
+
+  private recordError(path: string): void {
+    const now = Date.now();
+    
+    // Add error event for rate tracking
+    this.errorEvents.push({ timestamp: now, path });
+    
+    // Clean up old error events (older than 10 minutes)
+    this.errorEvents = this.errorEvents.filter(
+      event => now - event.timestamp < this.ERROR_WINDOW_MS
+    );
+    
+    // Update backoff state
+    const backoffState = this.backoffStates.get(path) || {
+      consecutiveErrors: 0,
+      backoffDelay: 0,
+      nextRetryTime: 0,
+      lastErrorTime: 0
+    };
+    
+    backoffState.consecutiveErrors++;
+    backoffState.lastErrorTime = now;
+    
+    // Calculate new backoff delay with exponential backoff
+    if (backoffState.consecutiveErrors === 1) {
+      backoffState.backoffDelay = this.INITIAL_BACKOFF_DELAY;
+    } else {
+      backoffState.backoffDelay = Math.min(
+        backoffState.backoffDelay * this.BACKOFF_MULTIPLIER,
+        this.MAX_BACKOFF_DELAY
+      );
+    }
+    
+    backoffState.nextRetryTime = now + backoffState.backoffDelay;
+    
+    this.backoffStates.set(path, backoffState);
+    
+    Logger.debug(
+      `Backoff for ${path}: ${backoffState.consecutiveErrors} consecutive errors, ` +
+      `next retry in ${backoffState.backoffDelay}ms`
+    );
+  }
+
+  private recordSuccess(path: string): void {
+    const backoffState = this.backoffStates.get(path);
+    if (backoffState && backoffState.consecutiveErrors > 0) {
+      Logger.debug(
+        `Request succeeded for ${path}, resetting backoff ` +
+        `(was ${backoffState.consecutiveErrors} consecutive errors)`
+      );
+      this.backoffStates.delete(path);
+    }
+  }
+
+  private getErrorRate(): number {
+    const now = Date.now();
+    const recentErrors = this.errorEvents.filter(
+      event => now - event.timestamp < this.ERROR_WINDOW_MS
+    );
+    // Return errors per minute over the 10-minute window
+    return (recentErrors.length / 10);
+  }
+
+  private getErrorRateByPath(): Record<string, number> {
+    const now = Date.now();
+    const recentErrors = this.errorEvents.filter(
+      event => now - event.timestamp < this.ERROR_WINDOW_MS
+    );
+    
+    const errorCounts: Record<string, number> = {};
+    recentErrors.forEach(event => {
+      errorCounts[event.path] = (errorCounts[event.path] || 0) + 1;
+    });
+    
+    // Convert counts to rate (errors per minute)
+    const errorRates: Record<string, number> = {};
+    Object.keys(errorCounts).forEach(path => {
+      errorRates[path] = errorCounts[path] / 10;
+    });
+    
+    return errorRates;
   }
 
   async get(path: string, fullUrl: string): Promise<CacheEntry | null> {
@@ -104,6 +212,26 @@ export class CacheManager {
   }
 
   async fetchFromBackend(path: string, fullUrl: string): Promise<CacheEntry> {
+    // Check if endpoint is in backoff
+    if (this.isInBackoff(path)) {
+      const delay = this.getBackoffDelay(path);
+      const backoffState = this.backoffStates.get(path);
+      Logger.debug(
+        `Endpoint ${path} is in backoff for ${delay}ms ` +
+        `(${backoffState?.consecutiveErrors} consecutive errors)`
+      );
+      
+      // Return stale cache if available during backoff
+      const staleCache = this.cache.get(path);
+      if (staleCache) {
+        Logger.debug(`Returning stale cache for ${path} during backoff`);
+        return staleCache;
+      }
+      
+      // No stale cache, throw error
+      throw new Error(`Endpoint ${path} is in backoff, no stale cache available`);
+    }
+    
     // Check if there's already a pending request for this URL
     const pending = this.pendingRequests.get(path);
     if (pending) {
@@ -136,6 +264,9 @@ export class CacheManager {
 
         this.cache.set(path, entry);
         
+        // Record successful request (resets backoff)
+        this.recordSuccess(path);
+        
         // Notify plugins about the response (fire and forget)
         this.pluginManager.notifyResponse(path, response.data);
         
@@ -143,6 +274,10 @@ export class CacheManager {
       } catch (error) {
         const axiosError = error as AxiosError;
         Logger.error(`Error fetching from backend ${backendUrl}:`, axiosError.message);
+        
+        // Record error for backoff tracking
+        this.recordError(path);
+        
         throw error;
       } finally {
         this.pendingRequests.delete(path);
@@ -203,7 +338,26 @@ export class CacheManager {
     this.cache.clear();
   }
 
-  getCacheStats(): { size: number; keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }> } {
+  isEndpointInBackoff(path: string): boolean {
+    return this.isInBackoff(path);
+  }
+
+  getCacheStats(): { 
+    size: number; 
+    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }>;
+    errorRate: number;
+    errorRateByPath: Record<string, number>;
+    backoffStates: Record<string, { consecutiveErrors: number; backoffDelayMs: number; nextRetryTime: number }>;
+  } {
+    const backoffStatesObj: Record<string, { consecutiveErrors: number; backoffDelayMs: number; nextRetryTime: number }> = {};
+    this.backoffStates.forEach((state, path) => {
+      backoffStatesObj[path] = {
+        consecutiveErrors: state.consecutiveErrors,
+        backoffDelayMs: state.backoffDelay,
+        nextRetryTime: state.nextRetryTime
+      };
+    });
+    
     return {
       size: this.cache.size,
       keys: Array.from(this.cache.entries()).reduce((acc, [key, entry]) => {
@@ -215,7 +369,10 @@ export class CacheManager {
           misses: stats.misses
         };
         return acc;
-      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }>)
+      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }>),
+      errorRate: this.getErrorRate(),
+      errorRateByPath: this.getErrorRateByPath(),
+      backoffStates: backoffStatesObj
     };
   }
 }
