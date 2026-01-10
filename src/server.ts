@@ -40,6 +40,12 @@ export class ProxyServer {
       next();
     });
 
+    // Set CORS headers
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      next();
+    });
+
     // Parse JSON bodies
     this.app.use(express.json());
   }
