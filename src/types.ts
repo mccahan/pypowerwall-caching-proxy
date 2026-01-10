@@ -19,11 +19,22 @@ export interface UrlConfig {
   staleTime?: number;
 }
 
+export interface PluginConfig {
+  mqtt?: {
+    host?: string;
+    port?: number;
+    username?: string;
+    password?: string;
+    prefix?: string;
+  };
+}
+
 export interface Config {
   backend: BackendConfig;
   proxy: ProxyConfig;
   cache: CacheConfig;
   urlConfigs: UrlConfig[];
+  plugins?: PluginConfig;
 }
 
 export interface CacheEntry {
@@ -37,4 +48,11 @@ export interface CacheEntry {
 export interface PendingRequest {
   promise: Promise<CacheEntry>;
   timestamp: number;
+}
+
+export interface Plugin {
+  name: string;
+  initialize(): Promise<void>;
+  onResponse(path: string, data: any): Promise<void>;
+  shutdown(): Promise<void>;
 }

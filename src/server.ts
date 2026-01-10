@@ -2,16 +2,19 @@ import express, { Request, Response, NextFunction } from 'express';
 import { ConfigLoader } from './config';
 import { CacheManager } from './cache';
 import { PollingScheduler } from './scheduler';
+import { PluginManager } from './plugins';
 
 export class ProxyServer {
   private app: express.Application;
   private cacheManager: CacheManager;
   private scheduler: PollingScheduler;
+  private pluginManager: PluginManager;
   private server: any;
 
   constructor() {
     this.app = express();
-    this.cacheManager = new CacheManager();
+    this.pluginManager = new PluginManager();
+    this.cacheManager = new CacheManager(this.pluginManager);
     this.scheduler = new PollingScheduler(this.cacheManager);
     this.setupMiddleware();
     this.setupRoutes();
@@ -124,7 +127,7 @@ export class ProxyServer {
     });
   }
 
-  start(): void {
+  async start(): Promise<void> {
     const config = ConfigLoader.get();
     
     this.server = this.app.listen(config.proxy.port, () => {
@@ -137,11 +140,19 @@ export class ProxyServer {
 
     // Start polling scheduler
     this.scheduler.start();
+    
+    // Initialize plugins in background (don't block server startup)
+    this.pluginManager.initialize().catch((error) => {
+      console.error('Plugin initialization error:', error);
+    });
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     console.log('Stopping proxy server...');
     this.scheduler.stop();
+    
+    // Shutdown plugins
+    await this.pluginManager.shutdown();
     
     if (this.server) {
       this.server.close(() => {

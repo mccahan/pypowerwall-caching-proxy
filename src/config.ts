@@ -39,7 +39,8 @@ export class ConfigLoader {
             cacheTTL: 30,
             staleTime: 10,
           },
-        ]
+        ],
+        plugins: {}
       };
     }
 

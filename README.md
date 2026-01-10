@@ -10,6 +10,7 @@ A high-performance Node.js caching proxy for [pypowerwall](https://github.com/ja
 - **Request Queueing**: One request per URL at a time to prevent overwhelming the backend
 - **Stale-While-Revalidate**: Serve stale cache while updating in the background
 - **Slow Request Fallback**: Return stale cache if backend is slow to respond
+- **MQTT Plugin**: Automatically publish power metrics to MQTT topics
 - **Docker Support**: Production-ready Dockerfile and docker-compose configuration
 - **GitHub Actions**: Automated Docker image building and publishing
 
@@ -62,6 +63,14 @@ Configuration can be provided via a `config.json` file or environment variables.
 - `SLOW_REQUEST_TIMEOUT`: Timeout for slow requests in milliseconds (default: `5000`)
 - `CONFIG_PATH`: Path to config.json file (default: `./config.json`)
 
+#### MQTT Plugin Environment Variables
+
+- `MQTT_HOST`: MQTT broker hostname (required to enable MQTT plugin)
+- `MQTT_PORT`: MQTT broker port (default: `1883`)
+- `MQTT_USER`: MQTT username (optional)
+- `MQTT_PASSWORD`: MQTT password (optional)
+- `MQTT_PREFIX`: Topic prefix for MQTT messages (default: `pypowerwall/`)
+
 ### Configuration File
 
 Create a `config.json` based on `config.example.json`:
@@ -96,6 +105,42 @@ Create a `config.json` based on `config.example.json`:
 - `pollInterval`: How often to poll this endpoint (in seconds). Set to `0` or omit to disable polling
 - `cacheTTL`: How long to cache responses (in seconds)
 - `staleTime`: When to consider cache stale and update in background (in seconds)
+
+## MQTT Plugin
+
+The MQTT plugin automatically publishes power metrics to an MQTT broker when enabled. This is useful for integrating with home automation systems like Home Assistant, OpenHAB, or custom MQTT subscribers.
+
+### Enabling MQTT
+
+Set the `MQTT_HOST` environment variable to enable the MQTT plugin:
+
+```bash
+docker run -p 8676:8676 \
+  -e BACKEND_URL=http://your-pypowerwall:8675 \
+  -e MQTT_HOST=your-mqtt-broker \
+  -e MQTT_PORT=1883 \
+  -e MQTT_USER=username \
+  -e MQTT_PASSWORD=password \
+  -e MQTT_PREFIX=pypowerwall/ \
+  pypowerwall-proxy
+```
+
+### Published Topics
+
+When responses from `/aggregates` are received, the plugin publishes:
+- `{prefix}site/instant_power` - Site instant power (W)
+- `{prefix}battery/instant_power` - Battery instant power (W)
+- `{prefix}solar/instant_power` - Solar instant power (W)
+- `{prefix}load/instant_power` - Load instant power (W)
+
+When responses from `/soe` are received, the plugin publishes:
+- `{prefix}battery/level` - Battery state of charge (%)
+
+### MQTT Configuration
+
+The MQTT plugin is configured via environment variables (see above). If `MQTT_HOST` is not set, the plugin is disabled and the proxy operates normally without MQTT functionality.
+
+MQTT errors are logged but do not affect the proxy's ability to serve requests. The plugin operates in a "fire and forget" mode to ensure maximum reliability of the caching proxy.
 
 ## API Endpoints
 
