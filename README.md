@@ -62,6 +62,7 @@ Configuration can be provided via a `config.json` file or environment variables.
 - `DEFAULT_STALE_TIME`: Default stale time in seconds (default: `60`)
 - `SLOW_REQUEST_TIMEOUT`: Timeout for slow requests in milliseconds (default: `5000`)
 - `CONFIG_PATH`: Path to config.json file (default: `./config.json`)
+- `DEBUG`: Enable debug logging mode (`true` or `1` to enable, default: disabled)
 
 #### MQTT Plugin Environment Variables
 
@@ -96,6 +97,32 @@ Create a `config.json` based on `config.example.json`:
       "staleTime": 10
     }
   ]
+}
+```
+
+### Debug Mode
+
+By default, the proxy only logs important events like startup, errors, and shutdown. To enable verbose logging that includes individual requests, polling operations, and MQTT publishes, set the `DEBUG` environment variable:
+
+```bash
+# Enable debug mode
+DEBUG=true npm start
+
+# Or with Docker
+docker run -p 8676:8676 \
+  -e BACKEND_URL=http://your-pypowerwall:8675 \
+  -e DEBUG=true \
+  pypowerwall-proxy
+```
+
+Debug mode can also be enabled in `config.json`:
+
+```json
+{
+  "proxy": {
+    "port": 8676,
+    "debug": true
+  }
 }
 ```
 

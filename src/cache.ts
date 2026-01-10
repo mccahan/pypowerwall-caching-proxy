@@ -2,6 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { CacheEntry, PendingRequest, UrlConfig } from './types';
 import { ConfigLoader } from './config';
 import { PluginManager } from './plugins';
+import { Logger } from './logger';
 
 export class CacheManager {
   private cache: Map<string, CacheEntry> = new Map();
@@ -95,7 +96,7 @@ export class CacheManager {
       try {
         await this.fetchFromBackend(path, fullUrl);
       } catch (error) {
-        console.error(`Error updating stale cache for ${path}:`, error);
+        Logger.error(`Error updating stale cache for ${path}:`, error);
       } finally {
         this.staleUpdateQueue.delete(path);
       }
@@ -141,7 +142,7 @@ export class CacheManager {
         return entry;
       } catch (error) {
         const axiosError = error as AxiosError;
-        console.error(`Error fetching from backend ${backendUrl}:`, axiosError.message);
+        Logger.error(`Error fetching from backend ${backendUrl}:`, axiosError.message);
         throw error;
       } finally {
         this.pendingRequests.delete(path);
@@ -176,12 +177,12 @@ export class CacheManager {
         // Request took too long, check if we have stale cache
         const staleCache = this.cache.get(path);
         if (staleCache) {
-          console.log(`Slow request for ${path}, returning stale cache`);
+          Logger.debug(`Slow request for ${path}, returning stale cache`);
           return { entry: staleCache, fromCache: true };
         }
 
         // No stale cache available, wait for the actual request
-        console.log(`Slow request for ${path}, no stale cache available, waiting...`);
+        Logger.debug(`Slow request for ${path}, no stale cache available, waiting...`);
         const actualEntry = await this.fetchFromBackend(path, fullUrl);
         return { entry: actualEntry, fromCache: false };
       }
@@ -191,7 +192,7 @@ export class CacheManager {
       // On error, try to return stale cache if available
       const staleCache = this.cache.get(path);
       if (staleCache) {
-        console.log(`Error fetching ${path}, returning stale cache`);
+        Logger.debug(`Error fetching ${path}, returning stale cache`);
         return { entry: staleCache, fromCache: true };
       }
       throw error;

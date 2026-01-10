@@ -1,5 +1,6 @@
 import mqtt, { MqttClient } from 'mqtt';
 import { Plugin } from '../types';
+import { Logger } from '../logger';
 
 export class MqttPlugin implements Plugin {
   name = 'mqtt';
@@ -35,13 +36,13 @@ export class MqttPlugin implements Plugin {
     this.enabled = !!this.host;
 
     if (this.enabled) {
-      console.log(`MQTT plugin enabled: ${this.host}:${this.port}, prefix: ${this.prefix}`);
+      Logger.info(`MQTT plugin enabled: ${this.host}:${this.port}, prefix: ${this.prefix}`);
     }
   }
 
   async initialize(): Promise<void> {
     if (!this.enabled) {
-      console.log('MQTT plugin disabled (MQTT_HOST not set)');
+      Logger.info('MQTT plugin disabled (MQTT_HOST not set)');
       return;
     }
 
@@ -61,12 +62,12 @@ export class MqttPlugin implements Plugin {
         this.client = mqtt.connect(`mqtt://${this.host}`, options);
 
         this.client.on('connect', () => {
-          console.log(`MQTT plugin connected to ${this.host}:${this.port}`);
+          Logger.info(`MQTT plugin connected to ${this.host}:${this.port}`);
           resolve();
         });
 
         this.client.on('error', (error) => {
-          console.error('MQTT connection error:', error.message);
+          Logger.error('MQTT connection error:', error.message);
           // Don't reject on error after initial connection attempt
           if (!this.client?.connected) {
             reject(error);
@@ -74,18 +75,18 @@ export class MqttPlugin implements Plugin {
         });
 
         this.client.on('disconnect', () => {
-          console.log('MQTT client disconnected');
+          Logger.debug('MQTT client disconnected');
         });
 
         // Timeout for initial connection
         setTimeout(() => {
           if (!this.client?.connected) {
-            console.error('MQTT connection timeout');
+            Logger.error('MQTT connection timeout');
             resolve(); // Don't fail initialization, just log
           }
         }, 5000);
       } catch (error) {
-        console.error('MQTT plugin initialization error:', error);
+        Logger.error('MQTT plugin initialization error:', error);
         resolve(); // Don't fail initialization
       }
     });
@@ -103,7 +104,7 @@ export class MqttPlugin implements Plugin {
         await this.handleSoeResponse(data);
       }
     } catch (error) {
-      console.error(`MQTT plugin error processing ${path}:`, error instanceof Error ? error.message : error);
+      Logger.error(`MQTT plugin error processing ${path}:`, error instanceof Error ? error.message : error);
       // Don't throw - we don't want to break the response flow
     }
   }
@@ -147,9 +148,9 @@ export class MqttPlugin implements Plugin {
 
       this.client!.publish(fullTopic, payload, (error) => {
         if (error) {
-          console.error(`MQTT publish error for ${fullTopic}:`, error.message);
+          Logger.error(`MQTT publish error for ${fullTopic}:`, error.message);
         } else {
-          console.log(`MQTT published: ${fullTopic} = ${payload}`);
+          Logger.debug(`MQTT published: ${fullTopic} = ${payload}`);
         }
         resolve(); // Always resolve, don't throw
       });
@@ -160,7 +161,7 @@ export class MqttPlugin implements Plugin {
     if (this.client) {
       return new Promise((resolve) => {
         this.client!.end(false, () => {
-          console.log('MQTT plugin shutdown');
+          Logger.info('MQTT plugin shutdown');
           resolve();
         });
       });

@@ -5,6 +5,10 @@ import { Config } from './types';
 export class ConfigLoader {
   private static instance: Config | null = null;
 
+  private static isDebugEnabled(): boolean {
+    return process.env.DEBUG === 'true' || process.env.DEBUG === '1';
+  }
+
   static load(): Config {
     if (this.instance) {
       return this.instance;
@@ -18,6 +22,15 @@ export class ConfigLoader {
     if (fs.existsSync(configPath)) {
       const configData = fs.readFileSync(configPath, 'utf-8');
       config = JSON.parse(configData);
+      
+      // Ensure required fields exist with defaults
+      if (!config.cache) {
+        config.cache = {
+          defaultTTL: 300,
+          defaultStaleTime: 60,
+          slowRequestTimeout: 5000
+        };
+      }
     } else {
       // Default configuration
       config = {
@@ -25,7 +38,8 @@ export class ConfigLoader {
           url: process.env.BACKEND_URL || 'http://localhost:8675'
         },
         proxy: {
-          port: parseInt(process.env.PROXY_PORT || '8676')
+          port: parseInt(process.env.PROXY_PORT || '8676'),
+          debug: this.isDebugEnabled()
         },
         cache: {
           defaultTTL: parseInt(process.env.DEFAULT_TTL || '300'),
@@ -120,6 +134,12 @@ export class ConfigLoader {
     }
     if (process.env.PROXY_PORT) {
       config.proxy.port = parseInt(process.env.PROXY_PORT);
+    }
+    // Initialize or override debug from environment variable
+    if (this.isDebugEnabled()) {
+      config.proxy.debug = true;
+    } else if (config.proxy.debug === undefined) {
+      config.proxy.debug = false;
     }
 
     this.instance = config;

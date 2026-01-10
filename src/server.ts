@@ -3,6 +3,7 @@ import { ConfigLoader } from './config';
 import { CacheManager } from './cache';
 import { PollingScheduler } from './scheduler';
 import { PluginManager } from './plugins';
+import { Logger } from './logger';
 
 export class ProxyServer {
   private app: express.Application;
@@ -31,7 +32,7 @@ export class ProxyServer {
         }
 
         const duration = Date.now() - start;
-        console.log(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+        Logger.debug(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
       });
       next();
     });
@@ -74,7 +75,7 @@ export class ProxyServer {
         const fullUrl = req.originalUrl;
         const path = req.path;
 
-        console.log(`Proxying request: ${req.method} ${fullUrl}`);
+        Logger.debug(`Proxying request: ${req.method} ${fullUrl}`);
 
         // Only handle GET requests with caching
         if (req.method !== 'GET') {
@@ -118,7 +119,7 @@ export class ProxyServer {
           res.send(entry.data);
         }
       } catch (error) {
-        console.error('Error handling request:', error);
+        Logger.error('Error handling request:', error);
         res.status(500).json({ 
           error: 'Internal server error',
           message: error instanceof Error ? error.message : 'Unknown error'
@@ -131,11 +132,12 @@ export class ProxyServer {
     const config = ConfigLoader.get();
     
     this.server = this.app.listen(config.proxy.port, () => {
-      console.log(`Pypowerwall caching proxy listening on port ${config.proxy.port}`);
-      console.log(`Backend URL: ${config.backend.url}`);
-      console.log(`Cache TTL: ${config.cache.defaultTTL}s`);
-      console.log(`Stale time: ${config.cache.defaultStaleTime}s`);
-      console.log(`Slow request timeout: ${config.cache.slowRequestTimeout}ms`);
+      Logger.info(`Pypowerwall caching proxy listening on port ${config.proxy.port}`);
+      Logger.info(`Backend URL: ${config.backend.url}`);
+      Logger.info(`Cache TTL: ${config.cache.defaultTTL}s`);
+      Logger.info(`Stale time: ${config.cache.defaultStaleTime}s`);
+      Logger.info(`Slow request timeout: ${config.cache.slowRequestTimeout}ms`);
+      Logger.info(`Debug mode: ${config.proxy.debug ? 'enabled' : 'disabled'}`);
     });
 
     // Start polling scheduler
@@ -143,12 +145,12 @@ export class ProxyServer {
     
     // Initialize plugins in background (don't block server startup)
     this.pluginManager.initialize().catch((error) => {
-      console.error('Plugin initialization error:', error);
+      Logger.error('Plugin initialization error:', error);
     });
   }
 
   async stop(): Promise<void> {
-    console.log('Stopping proxy server...');
+    Logger.info('Stopping proxy server...');
     this.scheduler.stop();
     
     // Shutdown plugins
@@ -156,7 +158,7 @@ export class ProxyServer {
     
     if (this.server) {
       this.server.close(() => {
-        console.log('Proxy server stopped');
+        Logger.info('Proxy server stopped');
       });
     }
   }
