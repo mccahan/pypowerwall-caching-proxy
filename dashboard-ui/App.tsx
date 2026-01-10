@@ -225,7 +225,7 @@ const App: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <span className="text-xs text-slate-600 font-medium">{(info.size / 1024).toFixed(1)} KB</span>
+                            <span className="text-xs text-slate-600 font-medium">{info.size > 1024 ? `${(info.size / 1024).toFixed(1)} KB` : `${info.size} B`}</span>
                           </td>
                           <td className="px-6 py-4 text-right">
                             <span className="text-xs text-slate-400 font-medium">
