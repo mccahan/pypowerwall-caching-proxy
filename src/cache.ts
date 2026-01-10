@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import { CacheEntry, PendingRequest, UrlConfig, BackoffState, ErrorEvent } from './types';
+import { CacheEntry, PendingRequest, UrlConfig, BackoffState, ErrorEvent, BackoffError } from './types';
 import { ConfigLoader } from './config';
 import { PluginManager } from './plugins';
 import { Logger } from './logger';
@@ -22,6 +22,7 @@ export class CacheManager {
   // Error rate tracking (10-minute window)
   private errorEvents: ErrorEvent[] = [];
   private readonly ERROR_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+  private readonly ERROR_WINDOW_MINUTES = 10;
 
   constructor(pluginManager: PluginManager) {
     const config = ConfigLoader.get();
@@ -138,8 +139,8 @@ export class CacheManager {
     const recentErrors = this.errorEvents.filter(
       event => now - event.timestamp < this.ERROR_WINDOW_MS
     );
-    // Return errors per minute over the 10-minute window
-    return (recentErrors.length / 10);
+    // Return errors per minute over the error window
+    return (recentErrors.length / this.ERROR_WINDOW_MINUTES);
   }
 
   private getErrorRateByPath(): Record<string, number> {
@@ -156,7 +157,7 @@ export class CacheManager {
     // Convert counts to rate (errors per minute)
     const errorRates: Record<string, number> = {};
     Object.keys(errorCounts).forEach(path => {
-      errorRates[path] = errorCounts[path] / 10;
+      errorRates[path] = errorCounts[path] / this.ERROR_WINDOW_MINUTES;
     });
     
     return errorRates;
@@ -228,8 +229,12 @@ export class CacheManager {
         return staleCache;
       }
       
-      // No stale cache, throw error
-      throw new Error(`Endpoint ${path} is in backoff, no stale cache available`);
+      // No stale cache, throw BackoffError
+      throw new BackoffError(
+        path,
+        delay,
+        backoffState?.consecutiveErrors || 0
+      );
     }
     
     // Check if there's already a pending request for this URL

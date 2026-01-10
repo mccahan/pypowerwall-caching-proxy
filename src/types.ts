@@ -69,3 +69,14 @@ export interface ErrorEvent {
   timestamp: number;
   path: string;
 }
+
+export class BackoffError extends Error {
+  constructor(
+    public path: string,
+    public retryAfterMs: number,
+    public consecutiveErrors: number
+  ) {
+    super(`Endpoint ${path} is in backoff, retry after ${retryAfterMs}ms (${consecutiveErrors} consecutive errors)`);
+    this.name = 'BackoffError';
+  }
+}
