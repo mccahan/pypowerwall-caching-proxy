@@ -1,5 +1,8 @@
 import { Logger } from './logger';
 
+// Minimum number of commas expected in a valid CSV response
+const MIN_CSV_COMMAS = 4;
+
 export class ResponseValidator {
   /**
    * Validates backend responses before they are cached.
@@ -24,7 +27,7 @@ export class ResponseValidator {
 
   private static validateJsonEndpoint(path: string, data: any): boolean {
     // Check if data is null or undefined
-    if (data === null || data === undefined) {
+    if (data == null) {
       Logger.debug(`Response validation failed for ${path}: data is null or undefined`);
       return false;
     }
@@ -35,7 +38,8 @@ export class ResponseValidator {
       return false;
     }
 
-    // For valid JSON endpoints, data should be an object or array
+    // For valid JSON endpoints, data should be an object (includes arrays)
+    // Note: In JavaScript, typeof array returns 'object'
     if (typeof data !== 'object') {
       Logger.debug(`Response validation failed for ${path}: data is not an object (type: ${typeof data})`);
       return false;
@@ -52,10 +56,10 @@ export class ResponseValidator {
       return false;
     }
 
-    // Count commas - should have at least 4
+    // Count commas - should have at least MIN_CSV_COMMAS
     const commaCount = (data.match(/,/g) || []).length;
-    if (commaCount < 4) {
-      Logger.debug(`Response validation failed for ${path}: insufficient commas (found ${commaCount}, need at least 4)`);
+    if (commaCount < MIN_CSV_COMMAS) {
+      Logger.debug(`Response validation failed for ${path}: insufficient commas (found ${commaCount}, need at least ${MIN_CSV_COMMAS})`);
       return false;
     }
 
