@@ -321,7 +321,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="mono text-[11px] text-slate-700 truncate" title={req.fullUrl}>
-                      {req.fullUrl.split('/').pop() || req.fullUrl}
+                      {req.fullUrl}
                     </p>
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-[10px] text-slate-400 font-medium">{formatDuration(req.runtimeMs)}</span>

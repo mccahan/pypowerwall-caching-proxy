@@ -68,9 +68,9 @@ export class ConfigLoader {
       },
       {
         path: '/soe',
-        pollInterval: 10,
-        cacheTTL: 30,
-        staleTime: 5,
+        pollInterval: 30,
+        cacheTTL: 60,
+        staleTime: 25,
       },
       {
         path: '/strings',
@@ -82,24 +82,29 @@ export class ConfigLoader {
         path: '/freq',
         pollInterval: 5,
         cacheTTL: 30,
-        staleTime: 5,
+        staleTime: 20,
       },
-      {
-        path: '/fans/pw',
-        pollInterval: 5,
-        cacheTTL: 30,
-        staleTime: 5,
-      },
+      // {
+      //   path: '/fans/pw',
+      //   pollInterval: 5,
+      //   cacheTTL: 30,
+      //   staleTime: 5,
+      // },
       {
         path: '/csv/v2',
-        pollInterval: 30,
+        pollInterval: 10,
         cacheTTL: 60,
-        staleTime: 30,
+        staleTime: 60,
       },
       {
         path: '/version',
         cacheTTL: 600,
         staleTime: 300,
+      },
+      {
+        path: '/alerts/pw',
+        cacheTTL: 60,
+        staleTime: 45,
       },
     ];
 
