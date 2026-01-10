@@ -32,7 +32,14 @@ export class ConfigLoader {
           defaultStaleTime: parseInt(process.env.DEFAULT_STALE_TIME || '60'),
           slowRequestTimeout: parseInt(process.env.SLOW_REQUEST_TIMEOUT || '5000')
         },
-        urlConfigs: []
+        urlConfigs: [
+          {
+            "path": "/aggregates",
+            "pollInterval": 5,
+            "cacheTTL": 30,
+            "staleTime": 10,
+          },
+        ]
       };
     }
 
