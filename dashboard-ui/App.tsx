@@ -192,6 +192,7 @@ const App: React.FC = () => {
                   <tr>
                     <th className="px-6 py-3">Key / Path</th>
                     <th className="px-6 py-3">Performance</th>
+                    <th className="px-6 py-3">Avg Response</th>
                     <th className="px-6 py-3">Size</th>
                     <th className="px-6 py-3 text-right">Last Fetch</th>
                   </tr>
@@ -225,6 +226,15 @@ const App: React.FC = () => {
                             </div>
                           </td>
                           <td className="px-6 py-4">
+                            {info.avgResponseTime !== undefined ? (
+                              <span className="text-xs text-slate-600 font-medium">
+                                {formatDuration(info.avgResponseTime)}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400 font-medium">-</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
                             <span className="text-xs text-slate-600 font-medium">{info.size > 1024 ? `${(info.size / 1024).toFixed(1)} KB` : `${info.size} B`}</span>
                           </td>
                           <td className="px-6 py-4 text-right">
@@ -237,7 +247,7 @@ const App: React.FC = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-400 italic text-sm">
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400 italic text-sm">
                         No cached entries matching your search
                       </td>
                     </tr>

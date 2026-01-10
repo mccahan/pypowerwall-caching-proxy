@@ -105,6 +105,16 @@ export class CacheManager {
     });
   }
 
+  private updateRequestDurations(fullUrl: string, durationMs: number): number[] {
+    const existingEntry = this.cache.get(fullUrl);
+    const existingDurations = existingEntry?.requestDurations || [];
+    
+    // Keep only the last 5 durations, add the new one
+    const updatedDurations = [...existingDurations, durationMs].slice(-5);
+    
+    return updatedDurations;
+  }
+
   async fetchFromBackend(fullUrl: string): Promise<CacheEntry> {
     // Check if there's already a pending request for this URL
     const pending = this.pendingRequests.get(fullUrl);
@@ -114,8 +124,10 @@ export class CacheManager {
 
     // Create new request
     const requestPromise = (async (): Promise<CacheEntry> => {
+      const requestStartTime = Date.now();
       try {
         const result = await this.connectionManager.fetch(fullUrl);
+        const requestDuration = Date.now() - requestStartTime;
 
         // Validate the response before caching using plugin manager
         if (!this.pluginManager.shouldCache(fullUrl, result.data)) {
@@ -123,12 +135,16 @@ export class CacheManager {
           throw new Error(`Invalid response for ${fullUrl}: validation failed`);
         }
 
+        // Update request durations for this URL
+        const requestDurations = this.updateRequestDurations(fullUrl, requestDuration);
+
         const entry: CacheEntry = {
           data: result.data,
           headers: result.headers,
           timestamp: Date.now(),
           ttl: this.getCacheTTL(fullUrl),
-          staleTime: this.getStaleTime(fullUrl)
+          staleTime: this.getStaleTime(fullUrl),
+          requestDurations
         };
 
         this.cache.set(fullUrl, entry);
@@ -222,7 +238,7 @@ export class CacheManager {
 
   getCacheStats(): { 
     size: number; 
-    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }>;
+    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number }>;
     errorRate: number;
     errorRateByPath: Record<string, number>;
     backoffStates: Record<string, { consecutiveErrors: number; backoffDelayMs: number; nextRetryTime: number }>;
@@ -234,14 +250,23 @@ export class CacheManager {
       size: this.cache.size,
       keys: Array.from(this.cache.entries()).reduce((acc, [key, entry]) => {
         const stats = this.cacheStats.get(key) || { hits: 0, misses: 0 };
+        
+        // Calculate average response time from the tracked durations
+        let avgResponseTime: number | undefined;
+        if (entry.requestDurations && entry.requestDurations.length > 0) {
+          const sum = entry.requestDurations.reduce((total, duration) => total + duration, 0);
+          avgResponseTime = sum / entry.requestDurations.length;
+        }
+        
         acc[key] = {
           lastFetchTime: entry.timestamp,
           size: JSON.stringify(entry.data).length,
           hits: stats.hits,
-          misses: stats.misses
+          misses: stats.misses,
+          avgResponseTime
         };
         return acc;
-      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number }>),
+      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number }>),
       errorRate,
       errorRateByPath,
       backoffStates
