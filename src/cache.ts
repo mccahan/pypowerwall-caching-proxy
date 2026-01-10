@@ -3,6 +3,7 @@ import { ConfigLoader } from './config';
 import { PluginManager } from './plugins';
 import { Logger } from './logger';
 import { ConnectionManager } from './connectionManager';
+import { ResponseValidator } from './responseValidator';
 
 export class CacheManager {
   private cache: Map<string, CacheEntry> = new Map();
@@ -116,6 +117,12 @@ export class CacheManager {
     const requestPromise = (async (): Promise<CacheEntry> => {
       try {
         const result = await this.connectionManager.fetch(fullUrl);
+
+        // Validate the response before caching
+        if (!ResponseValidator.validate(fullUrl, result.data)) {
+          Logger.debug(`Response validation failed for ${fullUrl}, not caching`);
+          throw new Error(`Invalid response for ${fullUrl}: validation failed`);
+        }
 
         const entry: CacheEntry = {
           data: result.data,
