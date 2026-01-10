@@ -5,6 +5,8 @@ import { PollingScheduler } from './scheduler';
 import { PluginManager } from './plugins';
 import { Logger } from './logger';
 import { ConnectionManager } from './connectionManager';
+const path = require('path');
+const fs = require('fs');
 
 export class ProxyServer {
   private app: express.Application;
@@ -48,6 +50,25 @@ export class ProxyServer {
 
     // Parse JSON bodies
     this.app.use(express.json());
+
+    // Serve static files from the "dashboard" directory if the URL contains a dot
+    this.app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.url.includes('.') || req.path === '/' ) {
+        let filePath: string;
+        if (req.path === '/') {
+          filePath = path.join(__dirname, '../dashboard', 'index.html');
+        } else {
+          filePath = path.join(__dirname, '../dashboard', req.url);
+        }
+
+        if (fs.existsSync(filePath)) {
+          return res.sendFile(filePath);
+        } else {
+          return res.status(404).send('File not found');
+        }
+      }
+      next();
+    });
   }
 
   private setupRoutes(): void {

@@ -16,6 +16,14 @@ COPY src ./src
 # Build TypeScript
 RUN npm run build
 
+# Build dashboard static files
+FROM node:20-alpine AS dashboard-builder
+WORKDIR /dashboard
+COPY dashboard/package*.json ./
+RUN npm ci
+COPY dashboard/ ./
+RUN npm run build
+
 # Production stage
 FROM node:20-alpine
 
@@ -29,6 +37,9 @@ RUN npm ci --only=production
 
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
+
+# Copy built dashboard from dashboard-builder
+COPY --from=dashboard-builder /dashboard/build ./dashboard
 
 # Copy example config (can be overridden with volume mount)
 COPY config.* /app/
