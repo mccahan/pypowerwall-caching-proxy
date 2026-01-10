@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { CacheEntry, PendingRequest, UrlConfig } from './types';
 import { ConfigLoader } from './config';
+import { PluginManager } from './plugins';
 
 export class CacheManager {
   private cache: Map<string, CacheEntry> = new Map();
@@ -9,8 +10,9 @@ export class CacheManager {
   private urlConfigs: Map<string, UrlConfig> = new Map();
   // Add a new Map to track cache hits and misses
   private cacheStats: Map<string, { hits: number; misses: number }> = new Map();
+  private pluginManager: PluginManager;
 
-  constructor() {
+  constructor(pluginManager: PluginManager) {
     const config = ConfigLoader.get();
     // Build URL config map for quick lookup
     config.urlConfigs.forEach(urlConfig => {
@@ -18,6 +20,7 @@ export class CacheManager {
     });
     // Initialize cacheStats
     this.cacheStats = new Map();
+    this.pluginManager = pluginManager;
   }
 
   private getUrlConfig(path: string): UrlConfig | undefined {
@@ -131,6 +134,10 @@ export class CacheManager {
         };
 
         this.cache.set(path, entry);
+        
+        // Notify plugins about the response (fire and forget)
+        this.pluginManager.notifyResponse(path, response.data);
+        
         return entry;
       } catch (error) {
         const axiosError = error as AxiosError;

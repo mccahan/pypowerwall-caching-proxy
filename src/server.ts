@@ -2,16 +2,19 @@ import express, { Request, Response, NextFunction } from 'express';
 import { ConfigLoader } from './config';
 import { CacheManager } from './cache';
 import { PollingScheduler } from './scheduler';
+import { PluginManager } from './plugins';
 
 export class ProxyServer {
   private app: express.Application;
   private cacheManager: CacheManager;
   private scheduler: PollingScheduler;
+  private pluginManager: PluginManager;
   private server: any;
 
   constructor() {
     this.app = express();
-    this.cacheManager = new CacheManager();
+    this.pluginManager = new PluginManager();
+    this.cacheManager = new CacheManager(this.pluginManager);
     this.scheduler = new PollingScheduler(this.cacheManager);
     this.setupMiddleware();
     this.setupRoutes();
@@ -117,8 +120,11 @@ export class ProxyServer {
     });
   }
 
-  start(): void {
+  async start(): Promise<void> {
     const config = ConfigLoader.get();
+    
+    // Initialize plugins first
+    await this.pluginManager.initialize();
     
     this.server = this.app.listen(config.proxy.port, () => {
       console.log(`Pypowerwall caching proxy listening on port ${config.proxy.port}`);
@@ -132,9 +138,12 @@ export class ProxyServer {
     this.scheduler.start();
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     console.log('Stopping proxy server...');
     this.scheduler.stop();
+    
+    // Shutdown plugins
+    await this.pluginManager.shutdown();
     
     if (this.server) {
       this.server.close(() => {

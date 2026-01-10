@@ -10,17 +10,20 @@ console.log('Configuration loaded successfully');
 const server = new ProxyServer();
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
-  server.stop();
+  await server.stop();
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully...');
-  server.stop();
+  await server.stop();
   process.exit(0);
 });
 
 // Start the server
-server.start();
+server.start().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
