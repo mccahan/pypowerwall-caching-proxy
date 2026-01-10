@@ -105,8 +105,15 @@ export class ProxyServer {
           }
         });
 
-        res.setHeader('Content-Type', 'application/json');
-        res.send(JSON.stringify(entry.data, null, 2));
+        // Send response
+        const contentType = entry.headers['content-type'] || '';
+        if (contentType.includes('application/json')) {
+          res.setHeader('Content-Type', 'application/json');
+          res.send(JSON.stringify(entry.data, null, 2));
+        } else {
+          res.setHeader('Content-Type', contentType);
+          res.send(entry.data);
+        }
       } catch (error) {
         console.error('Error handling request:', error);
         res.status(500).json({ 
