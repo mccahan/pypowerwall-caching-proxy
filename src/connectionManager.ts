@@ -35,6 +35,7 @@ export class ConnectionManager {
   private activeRequestCount: number = 0;
   private maxConcurrentRequests: number;
   private activeUrls: Set<string> = new Set();
+  private isProcessingQueue: boolean = false;
   
   // Track recently completed requests (last 20)
   private recentlyCompleted: CompletedRequest[] = [];
@@ -56,11 +57,12 @@ export class ConnectionManager {
     this.maxConcurrentRequests = config.backend.maxConcurrentRequests || 2;
     
     // Create HTTP/HTTPS agents with keepalive enabled
+    // maxFreeSockets is higher than maxSockets to keep more idle connections for better reuse
     this.httpAgent = new http.Agent({
       keepAlive: true,
       keepAliveMsecs: 1000,
       maxSockets: this.maxConcurrentRequests,
-      maxFreeSockets: this.maxConcurrentRequests,
+      maxFreeSockets: this.maxConcurrentRequests * 2,
       timeout: 60000,
     });
     
@@ -68,7 +70,7 @@ export class ConnectionManager {
       keepAlive: true,
       keepAliveMsecs: 1000,
       maxSockets: this.maxConcurrentRequests,
-      maxFreeSockets: this.maxConcurrentRequests,
+      maxFreeSockets: this.maxConcurrentRequests * 2,
       timeout: 60000,
     });
     
@@ -240,24 +242,35 @@ export class ConnectionManager {
   }
 
   private async processQueue(): Promise<void> {
-    // Process requests up to maxConcurrentRequests limit
-    while (this.requestQueue.length > 0 && this.activeRequestCount < this.maxConcurrentRequests) {
-      const request = this.requestQueue.shift();
-      if (!request) {
-        break;
-      }
+    // Prevent concurrent execution of processQueue itself
+    if (this.isProcessingQueue) {
+      return;
+    }
+    
+    this.isProcessingQueue = true;
+    
+    try {
+      // Process requests up to maxConcurrentRequests limit
+      while (this.requestQueue.length > 0 && this.activeRequestCount < this.maxConcurrentRequests) {
+        const request = this.requestQueue.shift();
+        if (!request) {
+          break;
+        }
 
-      // Increment active count and track the URL
-      this.activeRequestCount++;
-      this.activeUrls.add(request.fullUrl);
-      
-      // Process request asynchronously (don't await here to allow concurrent processing)
-      this.executeAndTrackRequest(request).finally(() => {
-        this.activeRequestCount--;
-        this.activeUrls.delete(request.fullUrl);
-        // Continue processing queue if there are more requests
-        this.processQueue();
-      });
+        // Increment active count and track the URL
+        this.activeRequestCount++;
+        this.activeUrls.add(request.fullUrl);
+        
+        // Process request asynchronously (don't await here to allow concurrent processing)
+        this.executeAndTrackRequest(request).finally(() => {
+          this.activeRequestCount--;
+          this.activeUrls.delete(request.fullUrl);
+          // Continue processing queue if there are more requests
+          this.processQueue();
+        });
+      }
+    } finally {
+      this.isProcessingQueue = false;
     }
   }
 
