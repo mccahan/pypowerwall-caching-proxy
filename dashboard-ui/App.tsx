@@ -328,6 +328,7 @@ const App: React.FC = () => {
               <table className="w-full text-left">
                 <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                   <tr>
+                    <th></th>
                     <th className="px-6 py-3">Key / Path</th>
                     <th className="px-6 py-3">Performance</th>
                     <th className="px-6 py-3">Avg Response</th>
@@ -343,18 +344,20 @@ const App: React.FC = () => {
                       const hitRate = total > 0 ? (info.hits / total) * 100 : 0;
                       return (
                         <tr key={key} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4">
+                          <td>
+                            {info.pollInterval && info.pollInterval > 0 && (
+                              <div title={`Auto-polling every ${info.pollInterval}s`}>
+                                <RefreshCcw className="w-[32px] text-emerald-500 pl-4" />
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 pl-2 py-4">
                             <div className="flex items-center gap-2">
                               <div className="flex flex-col flex-1 min-w-0">
                                 <span className="mono text-xs font-medium text-slate-700 truncate max-w-[200px] md:max-w-xs" title={key}>
                                   {key}
                                 </span>
                               </div>
-                              {info.pollInterval && info.pollInterval > 0 && (
-                                <div className="flex-shrink-0" title={`Auto-polling every ${info.pollInterval}s`}>
-                                  <RefreshCcw className="w-3.5 h-3.5 text-emerald-500" />
-                                </div>
-                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
