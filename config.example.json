@@ -1,7 +1,8 @@
 {
   "backend": {
     "url": "http://localhost:8675",
-    "comment": "Backend pypowerwall server URL"
+    "maxConcurrentRequests": 2,
+    "comment": "Backend pypowerwall server URL and max concurrent requests (default: 2)"
   },
   "proxy": {
     "port": 8676,

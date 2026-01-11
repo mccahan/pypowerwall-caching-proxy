@@ -172,6 +172,7 @@ export class ProxyServer {
     this.server = this.app.listen(config.proxy.port, () => {
       Logger.info(`Pypowerwall caching proxy listening on port ${config.proxy.port}`);
       Logger.info(`Backend URL: ${config.backend.url}`);
+      Logger.info(`Max concurrent requests: ${config.backend.maxConcurrentRequests}`);
       Logger.info(`Cache TTL: ${config.cache.defaultTTL}s`);
       Logger.info(`Stale time: ${config.cache.defaultStaleTime}s`);
       Logger.info(`Slow request timeout: ${config.cache.slowRequestTimeout}ms`);

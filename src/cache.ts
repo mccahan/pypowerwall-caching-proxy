@@ -224,10 +224,10 @@ export class CacheManager {
 
   getQueueStats(): { 
     queueLength: number; 
-    isProcessing: boolean; 
+    activeRequestCount: number;
+    maxConcurrentRequests: number;
     queuedUrls: string[];
-    currentProcessingUrl: string | null;
-    currentProcessingWaitTimeMs: number | null;
+    activeUrls: string[];
     recentlyCompleted: Array<{
       fullUrl: string;
       startTime: number;
@@ -241,7 +241,7 @@ export class CacheManager {
 
   getCacheStats(): { 
     size: number; 
-    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number }>;
+    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number }>;
     errorRate: number;
     errorRateByPath: Record<string, number>;
     backoffStates: Record<string, { consecutiveErrors: number; backoffDelayMs: number; nextRetryTime: number }>;
@@ -254,11 +254,13 @@ export class CacheManager {
       keys: Array.from(this.cache.entries()).reduce((acc, [key, entry]) => {
         const stats = this.cacheStats.get(key) || { hits: 0, misses: 0 };
         
-        // Calculate average response time from the tracked durations
+        // Calculate average and max response time from the tracked durations
         let avgResponseTime: number | undefined;
+        let maxResponseTime: number | undefined;
         if (entry.requestDurations && entry.requestDurations.length > 0) {
           const sum = entry.requestDurations.reduce((total, duration) => total + duration, 0);
           avgResponseTime = sum / entry.requestDurations.length;
+          maxResponseTime = Math.max(...entry.requestDurations);
         }
         
         acc[key] = {
@@ -266,10 +268,11 @@ export class CacheManager {
           size: JSON.stringify(entry.data).length,
           hits: stats.hits,
           misses: stats.misses,
-          avgResponseTime
+          avgResponseTime,
+          maxResponseTime
         };
         return acc;
-      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number }>),
+      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number }>),
       errorRate,
       errorRateByPath,
       backoffStates

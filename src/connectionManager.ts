@@ -1,4 +1,6 @@
 import axios, { AxiosError } from 'axios';
+import http from 'http';
+import https from 'https';
 import { ConfigLoader } from './config';
 import { BackoffState, ErrorEvent, BackoffError } from './types';
 import { Logger } from './logger';
@@ -24,11 +26,15 @@ interface CompletedRequest {
 }
 
 export class ConnectionManager {
-  // Global request queue - only one request at a time
+  // HTTP/HTTPS agents for connection pooling with keepalive
+  private httpAgent: http.Agent;
+  private httpsAgent: https.Agent;
+  
+  // Global request queue - configurable concurrent requests
   private requestQueue: QueuedRequest[] = [];
-  private isProcessing: boolean = false;
-  private currentProcessingUrl: string | null = null;
-  private currentProcessingStartTime: number | null = null;
+  private activeRequestCount: number = 0;
+  private maxConcurrentRequests: number;
+  private activeUrls: Set<string> = new Set();
   
   // Track recently completed requests (last 20)
   private recentlyCompleted: CompletedRequest[] = [];
@@ -44,6 +50,30 @@ export class ConnectionManager {
   private errorEvents: ErrorEvent[] = [];
   private readonly ERROR_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
   private readonly ERROR_WINDOW_MINUTES = 10;
+
+  constructor() {
+    const config = ConfigLoader.get();
+    this.maxConcurrentRequests = config.backend.maxConcurrentRequests || 2;
+    
+    // Create HTTP/HTTPS agents with keepalive enabled
+    this.httpAgent = new http.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 1000,
+      maxSockets: this.maxConcurrentRequests,
+      maxFreeSockets: this.maxConcurrentRequests,
+      timeout: 60000,
+    });
+    
+    this.httpsAgent = new https.Agent({
+      keepAlive: true,
+      keepAliveMsecs: 1000,
+      maxSockets: this.maxConcurrentRequests,
+      maxFreeSockets: this.maxConcurrentRequests,
+      timeout: 60000,
+    });
+    
+    Logger.debug(`ConnectionManager initialized with ${this.maxConcurrentRequests} max concurrent requests`);
+  }
 
   private isInBackoff(path: string): boolean {
     const backoffState = this.backoffStates.get(path);
@@ -159,10 +189,10 @@ export class ConnectionManager {
 
   getQueueStats(): { 
     queueLength: number; 
-    isProcessing: boolean; 
+    activeRequestCount: number;
+    maxConcurrentRequests: number;
     queuedUrls: string[];
-    currentProcessingUrl: string | null;
-    currentProcessingWaitTimeMs: number | null;
+    activeUrls: string[];
     recentlyCompleted: Array<{
       fullUrl: string;
       startTime: number;
@@ -173,12 +203,10 @@ export class ConnectionManager {
   } {
     return {
       queueLength: this.requestQueue.length,
-      isProcessing: this.isProcessing,
+      activeRequestCount: this.activeRequestCount,
+      maxConcurrentRequests: this.maxConcurrentRequests,
       queuedUrls: this.requestQueue.map(req => req.fullUrl),
-      currentProcessingUrl: this.currentProcessingUrl,
-      currentProcessingWaitTimeMs: this.currentProcessingStartTime 
-        ? Date.now() - this.currentProcessingStartTime 
-        : null,
+      activeUrls: Array.from(this.activeUrls),
       recentlyCompleted: [...this.recentlyCompleted]
     };
   }
@@ -212,57 +240,54 @@ export class ConnectionManager {
   }
 
   private async processQueue(): Promise<void> {
-    // If already processing, return (queue will be processed)
-    if (this.isProcessing) {
-      return;
-    }
-
-    // Mark as processing
-    this.isProcessing = true;
-
-    try {
-      // Process requests one at a time
-      let request = this.requestQueue.shift();
-      while (request) {
-        // Track current processing request
-        this.currentProcessingUrl = request.fullUrl;
-        this.currentProcessingStartTime = Date.now();
-        const startTime = this.currentProcessingStartTime;
-        
-        let success = false;
-        try {
-          const result = await this.executeRequest(request.fullUrl);
-          request.resolve(result);
-          success = true;
-        } catch (error) {
-          request.reject(error);
-        } finally {
-          const endTime = Date.now();
-          const runtimeMs = endTime - startTime;
-          
-          // Record completed request
-          this.recentlyCompleted.unshift({
-            fullUrl: request.fullUrl,
-            startTime,
-            endTime,
-            runtimeMs,
-            success
-          });
-          
-          // Keep only the most recent requests
-          if (this.recentlyCompleted.length > this.MAX_RECENT_REQUESTS) {
-            this.recentlyCompleted = this.recentlyCompleted.slice(0, this.MAX_RECENT_REQUESTS);
-          }
-          
-          // Clear current processing tracking
-          this.currentProcessingUrl = null;
-          this.currentProcessingStartTime = null;
-        }
-        
-        request = this.requestQueue.shift();
+    // Process requests up to maxConcurrentRequests limit
+    while (this.requestQueue.length > 0 && this.activeRequestCount < this.maxConcurrentRequests) {
+      const request = this.requestQueue.shift();
+      if (!request) {
+        break;
       }
+
+      // Increment active count and track the URL
+      this.activeRequestCount++;
+      this.activeUrls.add(request.fullUrl);
+      
+      // Process request asynchronously (don't await here to allow concurrent processing)
+      this.executeAndTrackRequest(request).finally(() => {
+        this.activeRequestCount--;
+        this.activeUrls.delete(request.fullUrl);
+        // Continue processing queue if there are more requests
+        this.processQueue();
+      });
+    }
+  }
+
+  private async executeAndTrackRequest(request: QueuedRequest): Promise<void> {
+    const startTime = Date.now();
+    let success = false;
+    
+    try {
+      const result = await this.executeRequest(request.fullUrl);
+      request.resolve(result);
+      success = true;
+    } catch (error) {
+      request.reject(error);
     } finally {
-      this.isProcessing = false;
+      const endTime = Date.now();
+      const runtimeMs = endTime - startTime;
+      
+      // Record completed request
+      this.recentlyCompleted.unshift({
+        fullUrl: request.fullUrl,
+        startTime,
+        endTime,
+        runtimeMs,
+        success
+      });
+      
+      // Keep only the most recent requests
+      if (this.recentlyCompleted.length > this.MAX_RECENT_REQUESTS) {
+        this.recentlyCompleted = this.recentlyCompleted.slice(0, this.MAX_RECENT_REQUESTS);
+      }
     }
   }
 
@@ -277,7 +302,9 @@ export class ConnectionManager {
       // - Only 5xx errors indicate backend failures that should trigger backoff
       const response = await axios.get(backendUrl, {
         timeout: 30000,
-        validateStatus: (status: number) => status < 500
+        validateStatus: (status: number) => status < 500,
+        httpAgent: this.httpAgent,
+        httpsAgent: this.httpsAgent,
       });
 
       const headers: Record<string, string> = {};

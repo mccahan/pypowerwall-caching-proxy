@@ -7,7 +7,8 @@ A high-performance Node.js caching proxy for [pypowerwall](https://github.com/ja
 - **1:1 Request Proxying**: Forwards all requests to the backend pypowerwall server
 - **Intelligent Caching**: Cache responses by URL with configurable TTL and stale times
 - **Scheduled Polling**: Automatically poll specific endpoints to keep cache fresh
-- **Request Queueing**: One request per URL at a time to prevent overwhelming the backend
+- **Request Queueing**: Configurable concurrent requests (default: 2) to prevent overwhelming the backend
+- **HTTP Connection Pooling**: Reuses TCP connections with keepalive for improved performance
 - **Stale-While-Revalidate**: Serve stale cache while updating in the background
 - **Slow Request Fallback**: Return stale cache if backend is slow to respond
 - **MQTT Plugin**: Automatically publish power metrics to MQTT topics
@@ -57,6 +58,7 @@ Configuration can be provided via a `config.json` file or environment variables.
 ### Environment Variables
 
 - `BACKEND_URL`: Backend pypowerwall server URL (default: `http://localhost:8675`)
+- `MAX_CONCURRENT_REQUESTS`: Maximum number of concurrent requests to backend (default: `2`)
 - `PROXY_PORT`: Port for the proxy to listen on (default: `8676`)
 - `DEFAULT_TTL`: Default cache TTL in seconds (default: `300`)
 - `DEFAULT_STALE_TIME`: Default stale time in seconds (default: `60`)
@@ -79,7 +81,8 @@ Create a `config.json` based on `config.example.json`:
 ```json
 {
   "backend": {
-    "url": "http://localhost:8675"
+    "url": "http://localhost:8675",
+    "maxConcurrentRequests": 2
   },
   "proxy": {
     "port": 8676
@@ -209,10 +212,10 @@ curl http://localhost:8676/queue/stats
 
 Returns current connection queue status, including:
 - `queueLength`: Number of requests waiting in queue
-- `isProcessing`: Whether a request is currently being processed
+- `activeRequestCount`: Number of requests currently being processed
+- `maxConcurrentRequests`: Maximum number of concurrent requests allowed
 - `queuedUrls`: Array of URLs waiting to be processed
-- `currentProcessingUrl`: The URL currently being processed (null if none)
-- `currentProcessingWaitTimeMs`: How long the current request has been processing (null if none)
+- `activeUrls`: Array of URLs currently being processed
 - `recentlyCompleted`: Array of the last 20 completed requests with their runtimes, containing:
   - `fullUrl`: The URL that was processed
   - `startTime`: When the request started processing (Unix timestamp)
