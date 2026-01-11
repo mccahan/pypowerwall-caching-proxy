@@ -71,7 +71,7 @@ const App: React.FC = () => {
   };
 
   const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
+    if (ms < 1000) return `${Math.round(ms)}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
@@ -282,7 +282,7 @@ const App: React.FC = () => {
             </div>
             
             {queueStats?.activeUrls && queueStats.activeUrls.length > 0 ? (
-              <div className="space-y-2 mb-4">
+              <div className="space-y-2 mb-4" style={{ height: '300px', overflowY: 'auto' }}>
                 <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">Processing Now ({queueStats.activeUrls.length}/{queueStats.maxConcurrentRequests})</p>
                 {queueStats.activeUrls.map((url, i) => (
                   <div key={i} className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
@@ -296,23 +296,22 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 ))}
+                {queueStats?.queuedUrls && queueStats.queuedUrls.length > 0 && (
+                  <div className="space-y-2 mt-4">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
+                    {queueStats.queuedUrls.map((url, i) => (
+                      <div key={i} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate">
+                        <span className="text-slate-300">#{i + 1}</span>
+                        {url}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+              <div className="flex flex-col items-center justify-center py-6 text-slate-400" style={{ height: '316px' }}>
                 <Layers className="w-8 h-8 opacity-20 mb-2" />
                 <p className="text-xs">No active requests</p>
-              </div>
-            )}
-
-            {queueStats?.queuedUrls && queueStats.queuedUrls.length > 0 && (
-              <div className="space-y-2 mt-4">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
-                {queueStats.queuedUrls.map((url, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate">
-                    <span className="text-slate-300">#{i + 1}</span>
-                    {url}
-                  </div>
-                ))}
               </div>
             )}
           </div>
