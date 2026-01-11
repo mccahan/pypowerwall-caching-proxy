@@ -179,6 +179,9 @@ export class ProxyServer {
       Logger.info(`Debug mode: ${config.proxy.debug ? 'enabled' : 'disabled'}`);
     });
 
+    // Warm the cache before starting polling
+    await this.scheduler.warmCache();
+
     // Start polling scheduler
     this.scheduler.start();
     

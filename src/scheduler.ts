@@ -10,6 +10,36 @@ export class PollingScheduler {
     this.cacheManager = cacheManager;
   }
 
+  async warmCache(): Promise<void> {
+    const config = ConfigLoader.get();
+    
+    // Get all paths that have a pollInterval configured
+    const pathsToWarm = config.urlConfigs
+      .filter(urlConfig => urlConfig.pollInterval && urlConfig.pollInterval > 0)
+      .map(urlConfig => urlConfig.path);
+    
+    if (pathsToWarm.length === 0) {
+      Logger.info('No paths configured with pollInterval, skipping cache warming');
+      return;
+    }
+    
+    Logger.info(`Warming cache for ${pathsToWarm.length} path(s)...`);
+    
+    // Poll all paths in parallel
+    const warmPromises = pathsToWarm.map(async (path) => {
+      try {
+        Logger.debug(`Warming cache for ${path}...`);
+        await this.cacheManager.fetchFromBackend(path);
+        Logger.debug(`Successfully warmed cache for ${path}`);
+      } catch (error) {
+        Logger.error(`Error warming cache for ${path}:`, error);
+      }
+    });
+    
+    await Promise.all(warmPromises);
+    Logger.info('Cache warming complete');
+  }
+
   start(): void {
     const config = ConfigLoader.get();
     
@@ -27,10 +57,7 @@ export class PollingScheduler {
   private schedulePolling(path: string, intervalSeconds: number): void {
     Logger.debug(`Scheduling polling for ${path} every ${intervalSeconds} seconds`);
     
-    // Initial poll
-    this.poll(path);
-    
-    // Schedule recurring polls
+    // Schedule recurring polls (initial poll is done during cache warming)
     const interval = setInterval(() => {
       this.poll(path);
     }, intervalSeconds * 1000);
