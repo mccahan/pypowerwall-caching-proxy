@@ -150,6 +150,8 @@ export class MqttPlugin implements Plugin {
   private async handleAlertsResponse(data: any): Promise<void> {
     if (data.SystemIslandedActive !== undefined) {
       await this.publish('site/offgrid', data.SystemIslandedActive ? '1' : '0');
+    } else {
+      await this.publish('site/offgrid', '0');
     }
   }
 
