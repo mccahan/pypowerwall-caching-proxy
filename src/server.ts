@@ -6,6 +6,7 @@ import { PollingScheduler } from './scheduler';
 import { PluginManager } from './plugins';
 import { Logger } from './logger';
 import { ConnectionManager } from './connectionManager';
+import { BackoffError } from './types';
 const path = require('path');
 const fs = require('fs');
 
@@ -166,6 +167,18 @@ export class ProxyServer {
         }
       } catch (error) {
         Logger.error('Error handling request:', error);
+        
+        // If this is a BackoffError or network error and cache was expired, return 503
+        // This indicates the service is temporarily unavailable (cached data expired, backend down)
+        if (error instanceof BackoffError || (error as any).code === 'ECONNREFUSED' || 
+            (error as any).code === 'ENOTFOUND' || (error as any).code === 'ETIMEDOUT') {
+          return res.status(503).json({ 
+            error: 'Service unavailable',
+            message: error instanceof Error ? error.message : 'Backend server is unavailable and cached data has expired'
+          });
+        }
+        
+        // For other errors, return 500
         res.status(500).json({ 
           error: 'Internal server error',
           message: error instanceof Error ? error.message : 'Unknown error'

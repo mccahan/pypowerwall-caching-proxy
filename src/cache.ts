@@ -189,27 +189,28 @@ export class CacheManager {
       ]);
 
       if (entry === null) {
-        // Request took too long, check if we have stale cache
+        // Request took too long, check if we have stale cache that's still within TTL
         const staleCache = this.cache.get(fullUrl);
-        if (staleCache) {
+        if (staleCache && this.isCacheValid(staleCache)) {
           Logger.debug(`Slow request for ${fullUrl}, returning stale cache`);
           return { entry: staleCache, fromCache: true };
         }
 
-        // No stale cache available, wait for the actual request
-        Logger.debug(`Slow request for ${fullUrl}, no stale cache available, waiting...`);
+        // No valid stale cache available, wait for the actual request
+        Logger.debug(`Slow request for ${fullUrl}, no valid stale cache available, waiting...`);
         const actualEntry = await this.fetchFromBackend(fullUrl);
         return { entry: actualEntry, fromCache: false };
       }
 
       return { entry, fromCache: false };
     } catch (error) {
-      // On error, try to return stale cache if available
+      // On error, try to return stale cache only if it's still within TTL
       const staleCache = this.cache.get(fullUrl);
-      if (staleCache) {
-        Logger.debug(`Error fetching ${fullUrl}, returning stale cache`);
+      if (staleCache && this.isCacheValid(staleCache)) {
+        Logger.debug(`Error fetching ${fullUrl}, returning stale cache (still within TTL)`);
         return { entry: staleCache, fromCache: true };
       }
+      // Cache is either not available or expired past TTL - throw error
       throw error;
     }
   }
