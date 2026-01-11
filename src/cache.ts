@@ -222,12 +222,12 @@ export class CacheManager {
     return this.connectionManager.isEndpointInBackoff(fullUrl);
   }
 
-  getQueueStats(): { 
-    queueLength: number; 
+  getQueueStats(): {
+    queueLength: number;
     activeRequestCount: number;
     maxConcurrentRequests: number;
     queuedUrls: string[];
-    activeUrls: string[];
+    activeUrls: Array<{ url: string; startTime: number; runtimeMs: number }>;
     recentlyCompleted: Array<{
       fullUrl: string;
       startTime: number;
@@ -241,7 +241,7 @@ export class CacheManager {
 
   getCacheStats(): { 
     size: number; 
-    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number }>;
+    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number; pollInterval?: number }>;
     errorRate: number;
     errorRateByPath: Record<string, number>;
     backoffStates: Record<string, { consecutiveErrors: number; backoffDelayMs: number; nextRetryTime: number }>;
@@ -253,6 +253,7 @@ export class CacheManager {
       size: this.cache.size,
       keys: Array.from(this.cache.entries()).reduce((acc, [key, entry]) => {
         const stats = this.cacheStats.get(key) || { hits: 0, misses: 0 };
+        const urlConfig = this.getUrlConfig(key);
         
         // Calculate average and max response time from the tracked durations
         let avgResponseTime: number | undefined;
@@ -269,10 +270,11 @@ export class CacheManager {
           hits: stats.hits,
           misses: stats.misses,
           avgResponseTime,
-          maxResponseTime
+          maxResponseTime,
+          pollInterval: urlConfig?.pollInterval
         };
         return acc;
-      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number }>),
+      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number; pollInterval?: number }>),
       errorRate,
       errorRateByPath,
       backoffStates

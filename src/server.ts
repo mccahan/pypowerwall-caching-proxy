@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import { WebSocketServer, WebSocket } from 'ws';
 import { ConfigLoader } from './config';
 import { CacheManager } from './cache';
 import { PollingScheduler } from './scheduler';
@@ -15,6 +16,7 @@ export class ProxyServer {
   private pluginManager: PluginManager;
   private connectionManager: ConnectionManager;
   private server: any;
+  private wss: WebSocketServer | null = null;
 
   constructor() {
     this.app = express();
@@ -22,6 +24,12 @@ export class ProxyServer {
     this.connectionManager = new ConnectionManager();
     this.cacheManager = new CacheManager(this.pluginManager, this.connectionManager);
     this.scheduler = new PollingScheduler(this.cacheManager);
+    
+    // Set up WebSocket broadcast callback
+    this.connectionManager.setQueueStatsChangeCallback(() => {
+      this.broadcastQueueStats();
+    });
+    
     this.setupMiddleware();
     this.setupRoutes();
   }
@@ -166,6 +174,52 @@ export class ProxyServer {
     });
   }
 
+  private setupWebSocket(): void {
+    if (!this.server) {
+      Logger.error('Cannot setup WebSocket: HTTP server not initialized');
+      return;
+    }
+
+    this.wss = new WebSocketServer({ server: this.server, path: '/ws' });
+    
+    this.wss.on('connection', (ws: WebSocket) => {
+      Logger.debug('WebSocket client connected');
+      
+      // Send initial queue stats
+      const queueStats = this.cacheManager.getQueueStats();
+      ws.send(JSON.stringify({ type: 'queueStats', data: queueStats }));
+      
+      ws.on('close', () => {
+        Logger.debug('WebSocket client disconnected');
+      });
+      
+      ws.on('error', (error) => {
+        Logger.error('WebSocket error:', error);
+      });
+    });
+    
+    Logger.info('WebSocket server initialized on /ws');
+  }
+
+  broadcastQueueStats(): void {
+    if (!this.wss) {
+      return;
+    }
+    
+    const queueStats = this.cacheManager.getQueueStats();
+    const message = JSON.stringify({ type: 'queueStats', data: queueStats });
+    
+    this.wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        try {
+          client.send(message);
+        } catch (error) {
+          Logger.debug('Error broadcasting to WebSocket client:', error);
+        }
+      }
+    });
+  }
+
   async start(): Promise<void> {
     const config = ConfigLoader.get();
     
@@ -178,6 +232,9 @@ export class ProxyServer {
       Logger.info(`Slow request timeout: ${config.cache.slowRequestTimeout}ms`);
       Logger.info(`Debug mode: ${config.proxy.debug ? 'enabled' : 'disabled'}`);
     });
+
+    // Setup WebSocket server
+    this.setupWebSocket();
 
     // Warm the cache before starting polling
     await this.scheduler.warmCache();
@@ -194,6 +251,13 @@ export class ProxyServer {
   async stop(): Promise<void> {
     Logger.info('Stopping proxy server...');
     this.scheduler.stop();
+    
+    // Close WebSocket server
+    if (this.wss) {
+      this.wss.close(() => {
+        Logger.info('WebSocket server closed');
+      });
+    }
     
     // Shutdown plugins
     await this.pluginManager.shutdown();

@@ -25,6 +25,11 @@ interface CompletedRequest {
   success: boolean;
 }
 
+interface ActiveRequest {
+  fullUrl: string;
+  startTime: number;
+}
+
 export class ConnectionManager {
   // HTTP/HTTPS agents for connection pooling with keepalive
   private httpAgent: http.Agent;
@@ -35,6 +40,7 @@ export class ConnectionManager {
   private activeRequestCount: number = 0;
   private maxConcurrentRequests: number;
   private activeUrls: Set<string> = new Set();
+  private activeRequestsMap: Map<string, ActiveRequest> = new Map();
   private isProcessingQueue: boolean = false;
   
   // Track recently completed requests (last 20)
@@ -51,6 +57,9 @@ export class ConnectionManager {
   private errorEvents: ErrorEvent[] = [];
   private readonly ERROR_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
   private readonly ERROR_WINDOW_MINUTES = 10;
+
+  // WebSocket broadcast callback
+  private onQueueStatsChanged?: () => void;
 
   constructor() {
     const config = ConfigLoader.get();
@@ -75,6 +84,16 @@ export class ConnectionManager {
     });
     
     Logger.debug(`ConnectionManager initialized with ${this.maxConcurrentRequests} max concurrent requests`);
+  }
+
+  setQueueStatsChangeCallback(callback: () => void): void {
+    this.onQueueStatsChanged = callback;
+  }
+
+  private notifyQueueStatsChanged(): void {
+    if (this.onQueueStatsChanged) {
+      this.onQueueStatsChanged();
+    }
   }
 
   private isInBackoff(path: string): boolean {
@@ -194,7 +213,7 @@ export class ConnectionManager {
     activeRequestCount: number;
     maxConcurrentRequests: number;
     queuedUrls: string[];
-    activeUrls: string[];
+    activeUrls: Array<{ url: string; startTime: number; runtimeMs: number }>;
     recentlyCompleted: Array<{
       fullUrl: string;
       startTime: number;
@@ -203,12 +222,20 @@ export class ConnectionManager {
       success: boolean;
     }>;
   } {
+    const now = Date.now();
+    // Only calculate runtime for truly active requests (those in activeRequestsMap)
+    const activeUrlsWithMetadata = Array.from(this.activeRequestsMap.entries()).map(([url, req]) => ({
+      url,
+      startTime: req.startTime,
+      runtimeMs: now - req.startTime
+    }));
+
     return {
       queueLength: this.requestQueue.length,
       activeRequestCount: this.activeRequestCount,
       maxConcurrentRequests: this.maxConcurrentRequests,
       queuedUrls: this.requestQueue.map(req => req.fullUrl),
-      activeUrls: Array.from(this.activeUrls),
+      activeUrls: activeUrlsWithMetadata,
       recentlyCompleted: [...this.recentlyCompleted]
     };
   }
@@ -237,6 +264,7 @@ export class ConnectionManager {
     // Add request to queue with timestamp
     return new Promise<FetchResult>((resolve, reject) => {
       this.requestQueue.push({ fullUrl, resolve, reject, queuedAt: Date.now() });
+      this.notifyQueueStatsChanged(); // Notify when queue changes
       this.processQueue();
     });
   }
@@ -257,14 +285,22 @@ export class ConnectionManager {
           break;
         }
 
-        // Increment active count and track the URL
+        // Increment active count and track the URL with start time
+        const startTime = Date.now();
         this.activeRequestCount++;
         this.activeUrls.add(request.fullUrl);
+        this.activeRequestsMap.set(request.fullUrl, {
+          fullUrl: request.fullUrl,
+          startTime
+        });
+        this.notifyQueueStatsChanged(); // Notify when active requests change
         
         // Process request asynchronously (don't await here to allow concurrent processing)
-        this.executeAndTrackRequest(request).finally(() => {
+        this.executeAndTrackRequest(request, startTime).finally(() => {
           this.activeRequestCount--;
           this.activeUrls.delete(request.fullUrl);
+          this.activeRequestsMap.delete(request.fullUrl);
+          this.notifyQueueStatsChanged(); // Notify when active requests change
           // Continue processing queue if there are more requests
           // Use setImmediate to avoid stack overflow with high request volumes
           setImmediate(() => this.processQueue());
@@ -275,8 +311,7 @@ export class ConnectionManager {
     }
   }
 
-  private async executeAndTrackRequest(request: QueuedRequest): Promise<void> {
-    const startTime = Date.now();
+  private async executeAndTrackRequest(request: QueuedRequest, startTime: number): Promise<void> {
     let success = false;
     
     try {
@@ -302,6 +337,8 @@ export class ConnectionManager {
       if (this.recentlyCompleted.length > this.MAX_RECENT_REQUESTS) {
         this.recentlyCompleted = this.recentlyCompleted.slice(0, this.MAX_RECENT_REQUESTS);
       }
+      
+      this.notifyQueueStatsChanged(); // Notify when recently completed changes
     }
   }
 

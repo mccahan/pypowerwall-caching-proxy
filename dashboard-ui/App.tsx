@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   Activity, 
   Database, 
@@ -11,10 +11,13 @@ import {
   Search,
   AlertCircle
 } from 'lucide-react';
-import { CacheStats, QueueStats, BackoffState, CacheEntry } from './types';
+import { CacheStats, QueueStats, BackoffState, CacheEntry, ActiveRequest } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = '';
+const WS_BASE = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL = `${WS_BASE}//${window.location.host}/ws`;
+const MIN_DISPLAY_TIME = 500; // Minimum time to show a request in ms
 
 const App: React.FC = () => {
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
@@ -25,21 +28,21 @@ const App: React.FC = () => {
   const [isClearing, setIsClearing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showConfirmClear, setShowConfirmClear] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  
+  // Track active requests with minimum display time
+  const activeRequestTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const [displayedActiveRequests, setDisplayedActiveRequests] = useState<ActiveRequest[]>([]);
 
-  const fetchStats = useCallback(async () => {
+  const fetchCacheStats = useCallback(async () => {
     try {
-      const [cacheRes, queueRes] = await Promise.all([
-        fetch(`${API_BASE}/cache/stats`),
-        fetch(`${API_BASE}/queue/stats`)
-      ]);
+      const cacheRes = await fetch(`${API_BASE}/cache/stats`);
       
-      if (!cacheRes.ok || !queueRes.ok) throw new Error('Failed to fetch stats');
+      if (!cacheRes.ok) throw new Error('Failed to fetch cache stats');
       
       const cacheData = await cacheRes.json();
-      const queueData = await queueRes.json();
       
       setCacheStats(cacheData);
-      setQueueStats(queueData);
       setLastUpdate(new Date());
       setError(null);
     } catch (err) {
@@ -50,11 +53,135 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const fetchQueueStats = useCallback(async () => {
+    try {
+      const queueRes = await fetch(`${API_BASE}/queue/stats`);
+      
+      if (!queueRes.ok) throw new Error('Failed to fetch queue stats');
+      
+      const queueData = await queueRes.json();
+      
+      setQueueStats(queueData);
+      updateDisplayedActiveRequests(queueData.activeUrls);
+    } catch (err) {
+      console.error('Error fetching queue stats:', err);
+    }
+  }, []);
+
+  // Update displayed active requests with minimum display time
+  const updateDisplayedActiveRequests = useCallback((newActiveRequests: ActiveRequest[]) => {
+    setDisplayedActiveRequests(prevDisplayed => {
+      const now = Date.now();
+      const newDisplayed = [...newActiveRequests];
+      const currentUrls = new Set(newActiveRequests.map(r => r.url));
+      
+      // Keep requests that just completed visible for minimum display time
+      prevDisplayed.forEach(req => {
+        if (!currentUrls.has(req.url)) {
+          const elapsed = now - req.startTime;
+          if (elapsed < MIN_DISPLAY_TIME) {
+            // Request just finished but hasn't been visible for minimum time
+            // Keep showing it with its current runtime (frozen at completion)
+            newDisplayed.push(req);
+            
+            // Set a timer to remove it after minimum display time
+            if (!activeRequestTimers.current.has(req.url)) {
+              const remainingTime = MIN_DISPLAY_TIME - elapsed;
+              const timer = setTimeout(() => {
+                setDisplayedActiveRequests(current => 
+                  current.filter(r => r.url !== req.url)
+                );
+                activeRequestTimers.current.delete(req.url);
+              }, remainingTime);
+              
+              activeRequestTimers.current.set(req.url, timer);
+            }
+          }
+        }
+      });
+      
+      // Clear timers for requests that are active again or already removed
+      activeRequestTimers.current.forEach((timer, url) => {
+        if (currentUrls.has(url) || !newDisplayed.find(r => r.url === url)) {
+          clearTimeout(timer);
+          activeRequestTimers.current.delete(url);
+        }
+      });
+      
+      return newDisplayed;
+    });
+  }, []);
+
+  // WebSocket connection for real-time queue updates
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 1000);
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connect = () => {
+      try {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+          console.log('WebSocket connected');
+          setWsConnected(true);
+          setError(null);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'queueStats') {
+              setQueueStats(message.data);
+              updateDisplayedActiveRequests(message.data.activeUrls);
+              setLastUpdate(new Date());
+            }
+          } catch (err) {
+            console.error('Error parsing WebSocket message:', err);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          setWsConnected(false);
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket disconnected, reconnecting in 3s...');
+          setWsConnected(false);
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
+      } catch (err) {
+        console.error('Error creating WebSocket:', err);
+        setWsConnected(false);
+        reconnectTimeout = setTimeout(connect, 3000);
+      }
+    };
+
+    // Initial fetch for queue stats (WebSocket will provide updates after)
+    fetchQueueStats();
+    
+    // Connect to WebSocket
+    connect();
+
+    return () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (ws) {
+        ws.close();
+      }
+      // Clear all active request timers
+      activeRequestTimers.current.forEach(timer => clearTimeout(timer));
+      activeRequestTimers.current.clear();
+    };
+  }, [fetchQueueStats, updateDisplayedActiveRequests]);
+
+  // Poll for cache stats only (queue stats come via WebSocket)
+  useEffect(() => {
+    fetchCacheStats();
+    const interval = setInterval(fetchCacheStats, 2000); // Poll cache stats every 2 seconds
     return () => clearInterval(interval);
-  }, [fetchStats]);
+  }, [fetchCacheStats]);
 
   const handleClearCache = async () => {
     setIsClearing(true);
@@ -62,7 +189,7 @@ const App: React.FC = () => {
       const res = await fetch(`${API_BASE}/cache/clear`, { method: 'POST' });
       if (res.ok) {
         setShowConfirmClear(false);
-        await fetchStats();
+        await fetchCacheStats();
       }
     } catch (err) {
       console.error(err);
@@ -118,6 +245,12 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-xs font-medium border border-amber-200">
               <AlertCircle className="w-4 h-4" />
               {error}
+            </div>
+          )}
+          {wsConnected && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium border border-emerald-200">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              Live Updates
             </div>
           )}
           <div className="text-right hidden sm:block">
@@ -195,6 +328,7 @@ const App: React.FC = () => {
               <table className="w-full text-left">
                 <thead className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                   <tr>
+                    <th></th>
                     <th className="px-6 py-3">Key / Path</th>
                     <th className="px-6 py-3">Performance</th>
                     <th className="px-6 py-3">Avg Response</th>
@@ -210,11 +344,20 @@ const App: React.FC = () => {
                       const hitRate = total > 0 ? (info.hits / total) * 100 : 0;
                       return (
                         <tr key={key} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex flex-col">
-                              <span className="mono text-xs font-medium text-slate-700 truncate max-w-[200px] md:max-w-xs" title={key}>
-                                {key}
-                              </span>
+                          <td>
+                            {info.pollInterval && info.pollInterval > 0 && (
+                              <div title={`Auto-polling every ${info.pollInterval}s`}>
+                                <RefreshCcw className="w-[32px] text-emerald-500 pl-4" />
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 pl-2 py-4">
+                            <div className="flex items-center gap-2">
+                              <div className="flex flex-col flex-1 min-w-0">
+                                <span className="mono text-xs font-medium text-slate-700 truncate max-w-[200px] md:max-w-xs" title={key}>
+                                  {key}
+                                </span>
+                              </div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -285,23 +428,25 @@ const App: React.FC = () => {
             <div style={{ height: '360px', overflowY: 'auto' }}>
               <div className="space-y-2 mb-4">
                 <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">
-                  Processing Now ({queueStats.activeUrls.length}/{queueStats.maxConcurrentRequests})
+                  Processing Now ({displayedActiveRequests.length}/{queueStats?.maxConcurrentRequests || 0})
                 </p>
-                {Array.from({ length: queueStats.maxConcurrentRequests }).map((_, i) => {
-                  const url = queueStats.activeUrls[i];
+                {Array.from({ length: queueStats?.maxConcurrentRequests || 0 }).map((_, i) => {
+                  const activeReq = displayedActiveRequests[i];
                   return (
                     <div
                       style={{ minHeight: '62px' }}
                       key={i}
                       className={`p-3 border rounded-lg ${
-                        url ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'
+                        activeReq ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'
                       }`}
                     >
-                      {url ? (
+                      {activeReq ? (
                         <>
-                          <p className="mono text-xs text-indigo-900 break-all mb-2">{url}</p>
-                          <p className="text-[10px] text-indigo-700 font-medium mb-2">{queueStats.activeUrls[i].runtimeMs}</p>
-                          <div className="flex items-center justify-end text-[10px]">
+                          <p className="mono text-xs text-indigo-900 break-all mb-1">{activeReq.url}</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] text-indigo-700 font-medium">
+                              Running: {formatDuration(activeReq.runtimeMs)}
+                            </p>
                             <div className="flex space-x-0.5">
                               <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
                               <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-75" />
@@ -320,7 +465,7 @@ const App: React.FC = () => {
               {/* Queued URLs */}
               <div className="space-y-2 mt-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
-                  {queueStats.queuedUrls.map((url, i) => (
+                  {queueStats?.queuedUrls.map((url, i) => (
                     <div
                       key={url}
                       className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate"
