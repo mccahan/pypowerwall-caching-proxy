@@ -71,7 +71,7 @@ const App: React.FC = () => {
   };
 
   const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${ms}ms`;
+    if (ms < 1000) return `${Math.round(ms)}ms`;
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
@@ -162,10 +162,10 @@ const App: React.FC = () => {
         <StatCard 
           icon={<Activity className="w-5 h-5" />}
           label="Worker Status"
-          value={queueStats?.isProcessing ? 'Active' : 'Idle'}
-          subValue={queueStats?.isProcessing ? 'Processing Queue' : 'Waiting for tasks'}
-          color={queueStats?.isProcessing ? 'emerald' : 'slate'}
-          isActive={queueStats?.isProcessing}
+          value={queueStats?.activeRequestCount ? `${queueStats.activeRequestCount} Active` : 'Idle'}
+          subValue={queueStats?.activeRequestCount ? `Processing (max ${queueStats.maxConcurrentRequests})` : 'Waiting for tasks'}
+          color={queueStats?.activeRequestCount ? 'emerald' : 'slate'}
+          isActive={queueStats?.activeRequestCount > 0}
         />
       </div>
 
@@ -197,6 +197,7 @@ const App: React.FC = () => {
                     <th className="px-6 py-3">Key / Path</th>
                     <th className="px-6 py-3">Performance</th>
                     <th className="px-6 py-3">Avg Response</th>
+                    <th className="px-6 py-3">Max Response</th>
                     <th className="px-6 py-3">Size</th>
                     <th className="px-6 py-3 text-right">Last Fetch</th>
                   </tr>
@@ -239,6 +240,15 @@ const App: React.FC = () => {
                             )}
                           </td>
                           <td className="px-6 py-4">
+                            {info.maxResponseTime !== undefined ? (
+                              <span className="text-xs text-slate-600 font-medium">
+                                {formatDuration(info.maxResponseTime)}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400 font-medium">-</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
                             <span className="text-xs text-slate-600 font-medium">{formatSize(info.size)}</span>
                           </td>
                           <td className="px-6 py-4 text-right">
@@ -271,37 +281,37 @@ const App: React.FC = () => {
               <h2 className="font-semibold text-slate-800">Processing Queue</h2>
             </div>
             
-            {queueStats?.currentProcessingUrl ? (
-              <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg mb-4">
-                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">Processing Now</p>
-                <p className="mono text-xs text-indigo-900 break-all mb-2">{queueStats.currentProcessingUrl}</p>
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-indigo-600 font-medium flex items-center gap-1">
-                    <Clock className="w-3 h-3" /> Wait: {formatDuration(queueStats.currentProcessingWaitTimeMs)}
-                  </span>
-                  <div className="flex space-x-0.5">
-                    <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
-                    <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-75" />
-                    <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-150" />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-6 text-slate-400">
-                <Layers className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-xs">Queue is empty</p>
-              </div>
-            )}
-
-            {queueStats?.queuedUrls && queueStats.queuedUrls.length > 0 && (
-              <div className="space-y-2 mt-4">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
-                {queueStats.queuedUrls.map((url, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate">
-                    <span className="text-slate-300">#{i + 1}</span>
-                    {url}
+            {queueStats?.activeUrls && queueStats.activeUrls.length > 0 ? (
+              <div className="space-y-2 mb-4" style={{ height: '300px', overflowY: 'auto' }}>
+                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">Processing Now ({queueStats.activeUrls.length}/{queueStats.maxConcurrentRequests})</p>
+                {queueStats.activeUrls.map((url, i) => (
+                  <div key={i} className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                    <p className="mono text-xs text-indigo-900 break-all mb-2">{url}</p>
+                    <div className="flex items-center justify-end text-[10px]">
+                      <div className="flex space-x-0.5">
+                        <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
+                        <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-75" />
+                        <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-150" />
+                      </div>
+                    </div>
                   </div>
                 ))}
+                {queueStats?.queuedUrls && queueStats.queuedUrls.length > 0 && (
+                  <div className="space-y-2 mt-4">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
+                    {queueStats.queuedUrls.map((url, i) => (
+                      <div key={i} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate">
+                        <span className="text-slate-300">#{i + 1}</span>
+                        {url}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-6 text-slate-400" style={{ height: '316px' }}>
+                <Layers className="w-8 h-8 opacity-20 mb-2" />
+                <p className="text-xs">No active requests</p>
               </div>
             )}
           </div>

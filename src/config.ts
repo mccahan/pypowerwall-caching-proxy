@@ -35,7 +35,8 @@ export class ConfigLoader {
       // Default configuration
       config = {
         backend: {
-          url: process.env.BACKEND_URL || 'http://localhost:8675'
+          url: process.env.BACKEND_URL || 'http://localhost:8675',
+          maxConcurrentRequests: parseInt(process.env.MAX_CONCURRENT_REQUESTS || '2')
         },
         proxy: {
           port: parseInt(process.env.PROXY_PORT || '8676'),
@@ -136,6 +137,16 @@ export class ConfigLoader {
     // Override with environment variables if present
     if (process.env.BACKEND_URL) {
       config.backend.url = process.env.BACKEND_URL;
+    }
+    if (process.env.MAX_CONCURRENT_REQUESTS) {
+      const parsed = parseInt(process.env.MAX_CONCURRENT_REQUESTS);
+      if (!isNaN(parsed) && parsed > 0) {
+        config.backend.maxConcurrentRequests = parsed;
+      }
+    }
+    // Ensure maxConcurrentRequests is valid (positive integer), default to 2
+    if (!config.backend.maxConcurrentRequests || config.backend.maxConcurrentRequests < 1) {
+      config.backend.maxConcurrentRequests = 2;
     }
     if (process.env.PROXY_PORT) {
       config.proxy.port = parseInt(process.env.PROXY_PORT);

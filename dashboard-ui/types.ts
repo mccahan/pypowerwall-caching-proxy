@@ -10,6 +10,7 @@ export interface CacheEntry {
   misses: number;
   lastFetchTime: number;
   avgResponseTime?: number;
+  maxResponseTime?: number;
 }
 
 export interface CacheStats {
@@ -28,9 +29,9 @@ export interface RecentlyCompletedRequest {
 
 export interface QueueStats {
   queueLength: number;
-  isProcessing: boolean;
-  currentProcessingUrl: string | null;
-  currentProcessingWaitTimeMs: number;
+  activeRequestCount: number;
+  maxConcurrentRequests: number;
   queuedUrls: string[];
+  activeUrls: string[];
   recentlyCompleted: RecentlyCompletedRequest[];
 }

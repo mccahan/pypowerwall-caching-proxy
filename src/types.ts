@@ -1,5 +1,6 @@
 export interface BackendConfig {
   url: string;
+  maxConcurrentRequests?: number;
 }
 
 export interface ProxyConfig {
