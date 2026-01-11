@@ -17,7 +17,7 @@ export class ResponseValidatorPlugin implements Plugin {
 
   shouldCache(path: string, data: any): boolean {
     // JSON endpoints that should not be null
-    const jsonEndpoints = ['/aggregates', '/soe', '/strings', '/freq', '/fans/pw', '/version'];
+    const jsonEndpoints = ['/aggregates', '/soe', '/strings', '/freq', '/fans/pw', '/version', '/alerts/pw', '/pod'];
     
     if (jsonEndpoints.includes(path)) {
       return this.validateJsonEndpoint(path, data);

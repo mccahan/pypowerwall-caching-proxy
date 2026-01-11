@@ -104,8 +104,15 @@ export class ConfigLoader {
       },
       {
         path: '/alerts/pw',
-        cacheTTL: 60,
-        staleTime: 45,
+        pollInterval: 30,
+        cacheTTL: 120,
+        staleTime: 60,
+      },
+      {
+        path: '/pod',
+        pollInterval: 30,
+        cacheTTL: 120,
+        staleTime: 60,
       },
     ];
 

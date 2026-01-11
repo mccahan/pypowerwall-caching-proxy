@@ -236,16 +236,16 @@ export class ProxyServer {
     // Setup WebSocket server
     this.setupWebSocket();
 
+    // Initialize plugins
+    this.pluginManager.initialize().catch((error) => {
+      Logger.error('Plugin initialization error:', error);
+    });
+
     // Warm the cache before starting polling
     await this.scheduler.warmCache();
 
     // Start polling scheduler
     this.scheduler.start();
-    
-    // Initialize plugins in background (don't block server startup)
-    this.pluginManager.initialize().catch((error) => {
-      Logger.error('Plugin initialization error:', error);
-    });
   }
 
   async stop(): Promise<void> {

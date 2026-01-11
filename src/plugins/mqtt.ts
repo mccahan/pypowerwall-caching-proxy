@@ -102,6 +102,10 @@ export class MqttPlugin implements Plugin {
         await this.handleAggregatesResponse(data);
       } else if (path === '/soe' && data) {
         await this.handleSoeResponse(data);
+      } else if (path === '/pod' && data) {
+        await this.handlePodResponse(data);
+      } else if (path === '/alerts/pw' && data) {
+        await this.handleAlertsResponse(data);
       }
     } catch (error) {
       Logger.error(`MQTT plugin error processing ${path}:`, error instanceof Error ? error.message : error);
@@ -134,6 +138,18 @@ export class MqttPlugin implements Plugin {
   private async handleSoeResponse(data: any): Promise<void> {
     if (data.percentage !== undefined) {
       await this.publish('battery/level', data.percentage);
+    }
+  }
+
+  private async handlePodResponse(data: any): Promise<void> {
+    if (data.time_remaining_hours !== undefined) {
+      await this.publish('battery/time_remaining', Math.round(data.time_remaining_hours * 10) / 10);
+    }
+  }
+
+  private async handleAlertsResponse(data: any): Promise<void> {
+    if (data.SystemIslandedActive !== undefined) {
+      await this.publish('site/offgrid', data.SystemIslandedActive ? '1' : '0');
     }
   }
 
