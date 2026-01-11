@@ -344,10 +344,17 @@ const App: React.FC = () => {
                       return (
                         <tr key={key} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4">
-                            <div className="flex flex-col">
-                              <span className="mono text-xs font-medium text-slate-700 truncate max-w-[200px] md:max-w-xs" title={key}>
-                                {key}
-                              </span>
+                            <div className="flex items-center gap-2">
+                              <div className="flex flex-col flex-1 min-w-0">
+                                <span className="mono text-xs font-medium text-slate-700 truncate max-w-[200px] md:max-w-xs" title={key}>
+                                  {key}
+                                </span>
+                              </div>
+                              {info.pollInterval && info.pollInterval > 0 && (
+                                <div className="flex-shrink-0" title={`Auto-polling every ${info.pollInterval}s`}>
+                                  <RefreshCcw className="w-3.5 h-3.5 text-emerald-500" />
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
