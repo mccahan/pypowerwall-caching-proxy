@@ -116,6 +116,24 @@ export class ProxyServer {
       res.send(JSON.stringify(queueStats, null, 2));
     });
 
+    // Retry backoff endpoint
+    this.app.post('/backoff/retry', (req: Request, res: Response) => {
+      const { path } = req.body;
+      
+      if (!path) {
+        return res.status(400).json({ success: false, message: 'Path is required' });
+      }
+
+      const cleared = this.cacheManager.clearBackoff(path);
+      
+      if (cleared) {
+        Logger.info(`Backoff cleared for ${path}`);
+        res.json({ success: true, message: `Backoff cleared for ${path}` });
+      } else {
+        res.json({ success: false, message: `No active backoff found for ${path}` });
+      }
+    });
+
     // Proxy all other requests
     this.app.use(async (req: Request, res: Response) => {
       try {

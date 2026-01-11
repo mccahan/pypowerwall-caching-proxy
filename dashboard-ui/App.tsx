@@ -9,7 +9,8 @@ import {
   CheckCircle2, 
   XCircle, 
   Search,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import { CacheStats, QueueStats, BackoffState, CacheEntry, ActiveRequest } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -29,6 +30,7 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  const [retryingBackoffs, setRetryingBackoffs] = useState<Set<string>>(new Set());
   
   // Track active requests with minimum display time
   const activeRequestTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -195,6 +197,30 @@ const App: React.FC = () => {
       console.error(err);
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  const handleRetryBackoff = async (path: string) => {
+    setRetryingBackoffs(prev => new Set(prev).add(path));
+    try {
+      const res = await fetch(`${API_BASE}/backoff/retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      });
+      
+      if (res.ok) {
+        // Refresh stats to update UI
+        await fetchCacheStats();
+      }
+    } catch (err) {
+      console.error('Error retrying backoff:', err);
+    } finally {
+      setRetryingBackoffs(prev => {
+        const next = new Set(prev);
+        next.delete(path);
+        return next;
+      });
     }
   };
 
@@ -516,12 +542,24 @@ const App: React.FC = () => {
               <div className="space-y-3">
                 {(Object.entries(cacheStats.backoffStates) as [string, BackoffState][]).map(([path, state]) => {
                   const retryIn = Math.max(0, state.nextRetryTime - Date.now());
+                  const isRetrying = retryingBackoffs.has(path);
                   return (
                     <div key={path} className="p-3 bg-white/50 rounded-lg border border-rose-200/50">
-                      <p className="mono text-xs text-rose-900 mb-1">{path}</p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-rose-500 uppercase">{state.consecutiveErrors} Errors</span>
-                        <span className="text-[10px] font-medium text-rose-600">Retry in {formatDuration(retryIn)}</span>
+                      <p className="mono text-xs text-rose-900 mb-2">{path}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <span className="text-[10px] font-bold text-rose-500 uppercase">{state.consecutiveErrors} Errors</span>
+                          <span className="text-[10px] font-medium text-rose-600">Retry in {formatDuration(retryIn)}</span>
+                        </div>
+                        <button
+                          onClick={() => handleRetryBackoff(path)}
+                          disabled={isRetrying}
+                          className="flex items-center gap-1 px-2 py-1 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white rounded text-[10px] font-semibold transition-colors"
+                          title="Manually retry this endpoint now"
+                        >
+                          <RotateCcw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                          {isRetrying ? 'Retrying...' : 'Retry Now'}
+                        </button>
                       </div>
                     </div>
                   );

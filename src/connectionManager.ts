@@ -208,6 +208,16 @@ export class ConnectionManager {
     return this.getErrorStats();
   }
 
+  clearBackoff(fullUrl: string): boolean {
+    const backoffState = this.backoffStates.get(fullUrl);
+    if (backoffState) {
+      Logger.debug(`Manually clearing backoff for ${fullUrl}`);
+      this.backoffStates.delete(fullUrl);
+      return true;
+    }
+    return false;
+  }
+
   getQueueStats(): { 
     queueLength: number; 
     activeRequestCount: number;
