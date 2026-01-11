@@ -173,7 +173,7 @@ const App: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Cache Section */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" style={{ minHeight: '442px' }}>
             <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <Database className="w-5 h-5 text-indigo-600" />
@@ -282,53 +282,53 @@ const App: React.FC = () => {
               <h2 className="font-semibold text-slate-800">Processing Queue</h2>
             </div>
             
-            <div style={{ height: '300px', overflowY: 'auto' }}>
+            <div style={{ height: '360px', overflowY: 'auto' }}>
               <div className="space-y-2 mb-4">
                 <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">
                   Processing Now ({queueStats.activeUrls.length}/{queueStats.maxConcurrentRequests})
                 </p>
-                <div style={{ height: '124px', overflow: 'hidden' }}>
-                  <AnimatePresence>
-                    {queueStats.activeUrls.map((url, i) => (
-                      <motion.div
-                        key={url}
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        mode="wait"
-                        exit={{ opacity: 0, y: 10 }}
-                        className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg peer-mt-2"
-                      >
-                        <p className="mono text-xs text-indigo-900 break-all mb-2">{url}</p>
-                        <div className="flex items-center justify-end text-[10px]">
-                          <div className="flex space-x-0.5">
-                            <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
-                            <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-75" />
-                            <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-150" />
+                {Array.from({ length: queueStats.maxConcurrentRequests }).map((_, i) => {
+                  const url = queueStats.activeUrls[i];
+                  return (
+                    <div
+                      style={{ minHeight: '62px' }}
+                      key={i}
+                      className={`p-3 border rounded-lg ${
+                        url ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'
+                      }`}
+                    >
+                      {url ? (
+                        <>
+                          <p className="mono text-xs text-indigo-900 break-all mb-2">{url}</p>
+                          <p className="text-[10px] text-indigo-700 font-medium mb-2">{queueStats.activeUrls[i].runtimeMs}</p>
+                          <div className="flex items-center justify-end text-[10px]">
+                            <div className="flex space-x-0.5">
+                              <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
+                              <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-75" />
+                              <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-150" />
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
+                        </>
+                      ) : (
+                        <p className="mono text-xs text-slate-400 text-center">&nbsp;</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Queued URLs */}
               <div className="space-y-2 mt-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
-                <AnimatePresence>
                   {queueStats.queuedUrls.map((url, i) => (
-                    <motion.div
+                    <div
                       key={url}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 10 }}
                       className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate"
                     >
                       <span className="text-slate-300">#{i + 1}</span>
                       {url}
-                    </motion.div>
+                    </div>
                   ))}
-                </AnimatePresence>
               </div>
             </div>
           </div>
