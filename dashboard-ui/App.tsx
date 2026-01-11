@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { 
   Activity, 
   Database, 
@@ -11,12 +11,13 @@ import {
   Search,
   AlertCircle
 } from 'lucide-react';
-import { CacheStats, QueueStats, BackoffState, CacheEntry } from './types';
+import { CacheStats, QueueStats, BackoffState, CacheEntry, ActiveRequest } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = '';
 const WS_BASE = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const WS_URL = `${WS_BASE}//${window.location.host}/ws`;
+const MIN_DISPLAY_TIME = 500; // Minimum time to show a request in ms
 
 const App: React.FC = () => {
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
@@ -28,6 +29,10 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
+  
+  // Track active requests with minimum display time
+  const activeRequestTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const [displayedActiveRequests, setDisplayedActiveRequests] = useState<ActiveRequest[]>([]);
 
   const fetchCacheStats = useCallback(async () => {
     try {
@@ -57,9 +62,44 @@ const App: React.FC = () => {
       const queueData = await queueRes.json();
       
       setQueueStats(queueData);
+      updateDisplayedActiveRequests(queueData.activeUrls);
     } catch (err) {
       console.error('Error fetching queue stats:', err);
     }
+  }, []);
+
+  // Update displayed active requests with minimum display time
+  const updateDisplayedActiveRequests = useCallback((newActiveRequests: ActiveRequest[]) => {
+    setDisplayedActiveRequests(prevDisplayed => {
+      const newDisplayed = [...newActiveRequests];
+      const currentUrls = new Set(newActiveRequests.map(r => r.url));
+      
+      // Clear timers for requests that are no longer active
+      activeRequestTimers.current.forEach((timer, url) => {
+        if (!currentUrls.has(url)) {
+          clearTimeout(timer);
+          activeRequestTimers.current.delete(url);
+        }
+      });
+      
+      // Add requests that are no longer active but should still be displayed
+      prevDisplayed.forEach(req => {
+        if (!currentUrls.has(req.url) && !activeRequestTimers.current.has(req.url)) {
+          // Request just finished, show it for minimum time
+          const timer = setTimeout(() => {
+            setDisplayedActiveRequests(current => 
+              current.filter(r => r.url !== req.url)
+            );
+            activeRequestTimers.current.delete(req.url);
+          }, MIN_DISPLAY_TIME);
+          
+          activeRequestTimers.current.set(req.url, timer);
+          newDisplayed.push(req);
+        }
+      });
+      
+      return newDisplayed;
+    });
   }, []);
 
   // WebSocket connection for real-time queue updates
@@ -82,6 +122,7 @@ const App: React.FC = () => {
             const message = JSON.parse(event.data);
             if (message.type === 'queueStats') {
               setQueueStats(message.data);
+              updateDisplayedActiveRequests(message.data.activeUrls);
               setLastUpdate(new Date());
             }
           } catch (err) {
@@ -119,8 +160,11 @@ const App: React.FC = () => {
       if (ws) {
         ws.close();
       }
+      // Clear all active request timers
+      activeRequestTimers.current.forEach(timer => clearTimeout(timer));
+      activeRequestTimers.current.clear();
     };
-  }, [fetchQueueStats]);
+  }, [fetchQueueStats, updateDisplayedActiveRequests]);
 
   // Poll for cache stats only (queue stats come via WebSocket)
   useEffect(() => {
@@ -364,22 +408,25 @@ const App: React.FC = () => {
             <div style={{ height: '360px', overflowY: 'auto' }}>
               <div className="space-y-2 mb-4">
                 <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">
-                  Processing Now ({queueStats?.activeUrls.length || 0}/{queueStats?.maxConcurrentRequests || 0})
+                  Processing Now ({displayedActiveRequests.length}/{queueStats?.maxConcurrentRequests || 0})
                 </p>
                 {Array.from({ length: queueStats?.maxConcurrentRequests || 0 }).map((_, i) => {
-                  const url = queueStats?.activeUrls[i];
+                  const activeReq = displayedActiveRequests[i];
                   return (
                     <div
                       style={{ minHeight: '62px' }}
                       key={i}
                       className={`p-3 border rounded-lg ${
-                        url ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'
+                        activeReq ? 'bg-indigo-50 border-indigo-100' : 'bg-slate-50 border-slate-100'
                       }`}
                     >
-                      {url ? (
+                      {activeReq ? (
                         <>
-                          <p className="mono text-xs text-indigo-900 break-all mb-2">{url}</p>
-                          <div className="flex items-center justify-end text-[10px]">
+                          <p className="mono text-xs text-indigo-900 break-all mb-1">{activeReq.url}</p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-[10px] text-indigo-700 font-medium">
+                              Running: {formatDuration(activeReq.runtimeMs)}
+                            </p>
                             <div className="flex space-x-0.5">
                               <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
                               <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-75" />

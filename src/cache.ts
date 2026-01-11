@@ -222,12 +222,12 @@ export class CacheManager {
     return this.connectionManager.isEndpointInBackoff(fullUrl);
   }
 
-  getQueueStats(): { 
-    queueLength: number; 
+  getQueueStats(): {
+    queueLength: number;
     activeRequestCount: number;
     maxConcurrentRequests: number;
     queuedUrls: string[];
-    activeUrls: string[];
+    activeUrls: Array<{ url: string; startTime: number; runtimeMs: number }>;
     recentlyCompleted: Array<{
       fullUrl: string;
       startTime: number;

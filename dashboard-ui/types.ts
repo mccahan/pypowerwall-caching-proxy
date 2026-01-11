@@ -27,11 +27,17 @@ export interface RecentlyCompletedRequest {
   endTime: number;
 }
 
+export interface ActiveRequest {
+  url: string;
+  startTime: number;
+  runtimeMs: number;
+}
+
 export interface QueueStats {
   queueLength: number;
   activeRequestCount: number;
   maxConcurrentRequests: number;
   queuedUrls: string[];
-  activeUrls: string[];
+  activeUrls: ActiveRequest[];
   recentlyCompleted: RecentlyCompletedRequest[];
 }

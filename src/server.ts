@@ -211,7 +211,11 @@ export class ProxyServer {
     
     this.wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
+        try {
+          client.send(message);
+        } catch (error) {
+          Logger.debug('Error broadcasting to WebSocket client:', error);
+        }
       }
     });
   }
