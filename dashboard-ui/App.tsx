@@ -12,6 +12,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { CacheStats, QueueStats, BackoffState, CacheEntry } from './types';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = '';
 
@@ -281,39 +282,55 @@ const App: React.FC = () => {
               <h2 className="font-semibold text-slate-800">Processing Queue</h2>
             </div>
             
-            {queueStats?.activeUrls && queueStats.activeUrls.length > 0 ? (
-              <div className="space-y-2 mb-4" style={{ height: '300px', overflowY: 'auto' }}>
-                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">Processing Now ({queueStats.activeUrls.length}/{queueStats.maxConcurrentRequests})</p>
-                {queueStats.activeUrls.map((url, i) => (
-                  <div key={i} className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
-                    <p className="mono text-xs text-indigo-900 break-all mb-2">{url}</p>
-                    <div className="flex items-center justify-end text-[10px]">
-                      <div className="flex space-x-0.5">
-                        <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
-                        <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-75" />
-                        <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-150" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {queueStats?.queuedUrls && queueStats.queuedUrls.length > 0 && (
-                  <div className="space-y-2 mt-4">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
-                    {queueStats.queuedUrls.map((url, i) => (
-                      <div key={i} className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate">
-                        <span className="text-slate-300">#{i + 1}</span>
-                        {url}
-                      </div>
+            <div style={{ height: '300px', overflowY: 'auto' }}>
+              <div className="space-y-2 mb-4">
+                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">
+                  Processing Now ({queueStats.activeUrls.length}/{queueStats.maxConcurrentRequests})
+                </p>
+                <div style={{ height: '124px', overflow: 'hidden' }}>
+                  <AnimatePresence>
+                    {queueStats.activeUrls.map((url, i) => (
+                      <motion.div
+                        key={url}
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        mode="wait"
+                        exit={{ opacity: 0, y: 10 }}
+                        className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg peer-mt-2"
+                      >
+                        <p className="mono text-xs text-indigo-900 break-all mb-2">{url}</p>
+                        <div className="flex items-center justify-end text-[10px]">
+                          <div className="flex space-x-0.5">
+                            <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
+                            <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-75" />
+                            <div className="w-1 h-3 bg-indigo-400 animate-pulse delay-150" />
+                          </div>
+                        </div>
+                      </motion.div>
                     ))}
-                  </div>
-                )}
+                  </AnimatePresence>
+                </div>
               </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-6 text-slate-400" style={{ height: '316px' }}>
-                <Layers className="w-8 h-8 opacity-20 mb-2" />
-                <p className="text-xs">No active requests</p>
+
+              {/* Queued URLs */}
+              <div className="space-y-2 mt-4">
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
+                <AnimatePresence>
+                  {queueStats.queuedUrls.map((url, i) => (
+                    <motion.div
+                      key={url}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate"
+                    >
+                      <span className="text-slate-300">#{i + 1}</span>
+                      {url}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
-            )}
+            </div>
           </div>
 
           {/* Recent History */}
