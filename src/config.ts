@@ -139,10 +139,13 @@ export class ConfigLoader {
       config.backend.url = process.env.BACKEND_URL;
     }
     if (process.env.MAX_CONCURRENT_REQUESTS) {
-      config.backend.maxConcurrentRequests = parseInt(process.env.MAX_CONCURRENT_REQUESTS);
+      const parsed = parseInt(process.env.MAX_CONCURRENT_REQUESTS);
+      if (!isNaN(parsed) && parsed > 0) {
+        config.backend.maxConcurrentRequests = parsed;
+      }
     }
-    // Ensure maxConcurrentRequests has a default value
-    if (!config.backend.maxConcurrentRequests) {
+    // Ensure maxConcurrentRequests is valid (positive integer), default to 2
+    if (!config.backend.maxConcurrentRequests || config.backend.maxConcurrentRequests < 1) {
       config.backend.maxConcurrentRequests = 2;
     }
     if (process.env.PROXY_PORT) {
