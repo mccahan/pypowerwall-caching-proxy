@@ -144,7 +144,7 @@ export class ConfigLoader {
         config.backend.maxConcurrentRequests = parsed;
       }
     }
-    // Ensure maxConcurrentRequests has a default value and is valid
+    // Ensure maxConcurrentRequests is valid (positive integer), default to 2
     if (!config.backend.maxConcurrentRequests || config.backend.maxConcurrentRequests < 1) {
       config.backend.maxConcurrentRequests = 2;
     }

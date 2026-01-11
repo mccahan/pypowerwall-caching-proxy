@@ -266,7 +266,8 @@ export class ConnectionManager {
           this.activeRequestCount--;
           this.activeUrls.delete(request.fullUrl);
           // Continue processing queue if there are more requests
-          this.processQueue();
+          // Use setImmediate to avoid stack overflow with high request volumes
+          setImmediate(() => this.processQueue());
         });
       }
     } finally {
