@@ -164,7 +164,13 @@ export class MqttPlugin implements Plugin {
       const fullTopic = `${this.prefix}${topic}`;
       const payload = typeof value === 'string' ? value : String(value);
 
-      this.client!.publish(fullTopic, payload, (error) => {
+      this.client!.publish(fullTopic, payload, {
+        retain: true,
+        qos: 1,
+        properties: {
+          messageExpiryInterval: 300,
+        },
+      }, (error) => {
         if (error) {
           Logger.error(`MQTT publish error for ${fullTopic}:`, error.message);
         } else {
