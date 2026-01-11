@@ -52,6 +52,9 @@ export class ConnectionManager {
   private readonly ERROR_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
   private readonly ERROR_WINDOW_MINUTES = 10;
 
+  // WebSocket broadcast callback
+  private onQueueStatsChanged?: () => void;
+
   constructor() {
     const config = ConfigLoader.get();
     this.maxConcurrentRequests = config.backend.maxConcurrentRequests || 2;
@@ -75,6 +78,16 @@ export class ConnectionManager {
     });
     
     Logger.debug(`ConnectionManager initialized with ${this.maxConcurrentRequests} max concurrent requests`);
+  }
+
+  setQueueStatsChangeCallback(callback: () => void): void {
+    this.onQueueStatsChanged = callback;
+  }
+
+  private notifyQueueStatsChanged(): void {
+    if (this.onQueueStatsChanged) {
+      this.onQueueStatsChanged();
+    }
   }
 
   private isInBackoff(path: string): boolean {
@@ -237,6 +250,7 @@ export class ConnectionManager {
     // Add request to queue with timestamp
     return new Promise<FetchResult>((resolve, reject) => {
       this.requestQueue.push({ fullUrl, resolve, reject, queuedAt: Date.now() });
+      this.notifyQueueStatsChanged(); // Notify when queue changes
       this.processQueue();
     });
   }
@@ -260,11 +274,13 @@ export class ConnectionManager {
         // Increment active count and track the URL
         this.activeRequestCount++;
         this.activeUrls.add(request.fullUrl);
+        this.notifyQueueStatsChanged(); // Notify when active requests change
         
         // Process request asynchronously (don't await here to allow concurrent processing)
         this.executeAndTrackRequest(request).finally(() => {
           this.activeRequestCount--;
           this.activeUrls.delete(request.fullUrl);
+          this.notifyQueueStatsChanged(); // Notify when active requests change
           // Continue processing queue if there are more requests
           // Use setImmediate to avoid stack overflow with high request volumes
           setImmediate(() => this.processQueue());
@@ -302,6 +318,8 @@ export class ConnectionManager {
       if (this.recentlyCompleted.length > this.MAX_RECENT_REQUESTS) {
         this.recentlyCompleted = this.recentlyCompleted.slice(0, this.MAX_RECENT_REQUESTS);
       }
+      
+      this.notifyQueueStatsChanged(); // Notify when recently completed changes
     }
   }
 

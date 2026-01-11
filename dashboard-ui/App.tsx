@@ -15,6 +15,8 @@ import { CacheStats, QueueStats, BackoffState, CacheEntry } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const API_BASE = '';
+const WS_BASE = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const WS_URL = `${WS_BASE}//${window.location.host}/ws`;
 
 const App: React.FC = () => {
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
@@ -25,21 +27,17 @@ const App: React.FC = () => {
   const [isClearing, setIsClearing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showConfirmClear, setShowConfirmClear] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
 
-  const fetchStats = useCallback(async () => {
+  const fetchCacheStats = useCallback(async () => {
     try {
-      const [cacheRes, queueRes] = await Promise.all([
-        fetch(`${API_BASE}/cache/stats`),
-        fetch(`${API_BASE}/queue/stats`)
-      ]);
+      const cacheRes = await fetch(`${API_BASE}/cache/stats`);
       
-      if (!cacheRes.ok || !queueRes.ok) throw new Error('Failed to fetch stats');
+      if (!cacheRes.ok) throw new Error('Failed to fetch cache stats');
       
       const cacheData = await cacheRes.json();
-      const queueData = await queueRes.json();
       
       setCacheStats(cacheData);
-      setQueueStats(queueData);
       setLastUpdate(new Date());
       setError(null);
     } catch (err) {
@@ -50,11 +48,86 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const fetchQueueStats = useCallback(async () => {
+    try {
+      const queueRes = await fetch(`${API_BASE}/queue/stats`);
+      
+      if (!queueRes.ok) throw new Error('Failed to fetch queue stats');
+      
+      const queueData = await queueRes.json();
+      
+      setQueueStats(queueData);
+    } catch (err) {
+      console.error('Error fetching queue stats:', err);
+    }
+  }, []);
+
+  // WebSocket connection for real-time queue updates
   useEffect(() => {
-    fetchStats();
-    const interval = setInterval(fetchStats, 1000);
+    let ws: WebSocket | null = null;
+    let reconnectTimeout: NodeJS.Timeout;
+
+    const connect = () => {
+      try {
+        ws = new WebSocket(WS_URL);
+
+        ws.onopen = () => {
+          console.log('WebSocket connected');
+          setWsConnected(true);
+          setError(null);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+            if (message.type === 'queueStats') {
+              setQueueStats(message.data);
+              setLastUpdate(new Date());
+            }
+          } catch (err) {
+            console.error('Error parsing WebSocket message:', err);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          setWsConnected(false);
+        };
+
+        ws.onclose = () => {
+          console.log('WebSocket disconnected, reconnecting in 3s...');
+          setWsConnected(false);
+          reconnectTimeout = setTimeout(connect, 3000);
+        };
+      } catch (err) {
+        console.error('Error creating WebSocket:', err);
+        setWsConnected(false);
+        reconnectTimeout = setTimeout(connect, 3000);
+      }
+    };
+
+    // Initial fetch for queue stats (WebSocket will provide updates after)
+    fetchQueueStats();
+    
+    // Connect to WebSocket
+    connect();
+
+    return () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (ws) {
+        ws.close();
+      }
+    };
+  }, [fetchQueueStats]);
+
+  // Poll for cache stats only (queue stats come via WebSocket)
+  useEffect(() => {
+    fetchCacheStats();
+    const interval = setInterval(fetchCacheStats, 2000); // Poll cache stats every 2 seconds
     return () => clearInterval(interval);
-  }, [fetchStats]);
+  }, [fetchCacheStats]);
 
   const handleClearCache = async () => {
     setIsClearing(true);
@@ -62,7 +135,7 @@ const App: React.FC = () => {
       const res = await fetch(`${API_BASE}/cache/clear`, { method: 'POST' });
       if (res.ok) {
         setShowConfirmClear(false);
-        await fetchStats();
+        await fetchCacheStats();
       }
     } catch (err) {
       console.error(err);
@@ -118,6 +191,12 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-700 rounded-full text-xs font-medium border border-amber-200">
               <AlertCircle className="w-4 h-4" />
               {error}
+            </div>
+          )}
+          {wsConnected && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium border border-emerald-200">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              Live Updates
             </div>
           )}
           <div className="text-right hidden sm:block">
@@ -285,10 +364,10 @@ const App: React.FC = () => {
             <div style={{ height: '360px', overflowY: 'auto' }}>
               <div className="space-y-2 mb-4">
                 <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider mb-1">
-                  Processing Now ({queueStats.activeUrls.length}/{queueStats.maxConcurrentRequests})
+                  Processing Now ({queueStats?.activeUrls.length || 0}/{queueStats?.maxConcurrentRequests || 0})
                 </p>
-                {Array.from({ length: queueStats.maxConcurrentRequests }).map((_, i) => {
-                  const url = queueStats.activeUrls[i];
+                {Array.from({ length: queueStats?.maxConcurrentRequests || 0 }).map((_, i) => {
+                  const url = queueStats?.activeUrls[i];
                   return (
                     <div
                       style={{ minHeight: '62px' }}
@@ -300,7 +379,6 @@ const App: React.FC = () => {
                       {url ? (
                         <>
                           <p className="mono text-xs text-indigo-900 break-all mb-2">{url}</p>
-                          <p className="text-[10px] text-indigo-700 font-medium mb-2">{queueStats.activeUrls[i].runtimeMs}</p>
                           <div className="flex items-center justify-end text-[10px]">
                             <div className="flex space-x-0.5">
                               <div className="w-1 h-3 bg-indigo-400 animate-pulse" />
@@ -320,7 +398,7 @@ const App: React.FC = () => {
               {/* Queued URLs */}
               <div className="space-y-2 mt-4">
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">In Queue</h3>
-                  {queueStats.queuedUrls.map((url, i) => (
+                  {queueStats?.queuedUrls.map((url, i) => (
                     <div
                       key={url}
                       className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded text-[11px] mono text-slate-600 truncate"
