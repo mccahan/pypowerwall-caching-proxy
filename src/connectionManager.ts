@@ -223,6 +223,7 @@ export class ConnectionManager {
     }>;
   } {
     const now = Date.now();
+    // Only calculate runtime for truly active requests (those in activeRequestsMap)
     const activeUrlsWithMetadata = Array.from(this.activeRequestsMap.entries()).map(([url, req]) => ({
       url,
       startTime: req.startTime,

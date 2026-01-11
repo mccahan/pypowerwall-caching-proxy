@@ -71,30 +71,40 @@ const App: React.FC = () => {
   // Update displayed active requests with minimum display time
   const updateDisplayedActiveRequests = useCallback((newActiveRequests: ActiveRequest[]) => {
     setDisplayedActiveRequests(prevDisplayed => {
+      const now = Date.now();
       const newDisplayed = [...newActiveRequests];
       const currentUrls = new Set(newActiveRequests.map(r => r.url));
       
-      // Clear timers for requests that are no longer active
-      activeRequestTimers.current.forEach((timer, url) => {
-        if (!currentUrls.has(url)) {
-          clearTimeout(timer);
-          activeRequestTimers.current.delete(url);
+      // Keep requests that just completed visible for minimum display time
+      prevDisplayed.forEach(req => {
+        if (!currentUrls.has(req.url)) {
+          const elapsed = now - req.startTime;
+          if (elapsed < MIN_DISPLAY_TIME) {
+            // Request just finished but hasn't been visible for minimum time
+            // Keep showing it with its current runtime (frozen at completion)
+            newDisplayed.push(req);
+            
+            // Set a timer to remove it after minimum display time
+            if (!activeRequestTimers.current.has(req.url)) {
+              const remainingTime = MIN_DISPLAY_TIME - elapsed;
+              const timer = setTimeout(() => {
+                setDisplayedActiveRequests(current => 
+                  current.filter(r => r.url !== req.url)
+                );
+                activeRequestTimers.current.delete(req.url);
+              }, remainingTime);
+              
+              activeRequestTimers.current.set(req.url, timer);
+            }
+          }
         }
       });
       
-      // Add requests that are no longer active but should still be displayed
-      prevDisplayed.forEach(req => {
-        if (!currentUrls.has(req.url) && !activeRequestTimers.current.has(req.url)) {
-          // Request just finished, show it for minimum time
-          const timer = setTimeout(() => {
-            setDisplayedActiveRequests(current => 
-              current.filter(r => r.url !== req.url)
-            );
-            activeRequestTimers.current.delete(req.url);
-          }, MIN_DISPLAY_TIME);
-          
-          activeRequestTimers.current.set(req.url, timer);
-          newDisplayed.push(req);
+      // Clear timers for requests that are active again or already removed
+      activeRequestTimers.current.forEach((timer, url) => {
+        if (currentUrls.has(url) || !newDisplayed.find(r => r.url === url)) {
+          clearTimeout(timer);
+          activeRequestTimers.current.delete(url);
         }
       });
       
