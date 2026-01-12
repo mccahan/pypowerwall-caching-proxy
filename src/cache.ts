@@ -223,6 +223,10 @@ export class CacheManager {
     return this.connectionManager.isEndpointInBackoff(fullUrl);
   }
 
+  clearBackoff(fullUrl: string): boolean {
+    return this.connectionManager.clearBackoff(fullUrl);
+  }
+
   getQueueStats(): {
     queueLength: number;
     activeRequestCount: number;
