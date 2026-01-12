@@ -368,6 +368,12 @@ const App: React.FC = () => {
                             <AlertTriangle className="w-4 h-4 text-amber-600" />
                           </div>
                         );
+                      } else if (info.pollInterval && info.pollInterval > 0) {
+                        statusIcon = (
+                          <div title={`Auto-polling every ${info.pollInterval}s`}>
+                            <RefreshCcw className="w-4 h-4 text-emerald-500" />
+                          </div>
+                        );
                       }
                       
                       return (
@@ -375,11 +381,6 @@ const App: React.FC = () => {
                           <td>
                             <div className="flex items-center gap-1 pl-2">
                               {statusIcon}
-                              {info.pollInterval && info.pollInterval > 0 && (
-                                <div title={`Auto-polling every ${info.pollInterval}s`}>
-                                  <RefreshCcw className="w-4 h-4 text-emerald-500" />
-                                </div>
-                              )}
                             </div>
                           </td>
                           <td className="px-6 pl-2 py-4">
