@@ -348,7 +348,7 @@ const App: React.FC = () => {
                       const now = Date.now();
                       const age = now - info.lastFetchTime;
                       const isExpired = age >= info.ttl;
-                      const isStale = !isExpired && age >= info.staleTime;
+                      const isStale = !isExpired && age >= info.staleTime + 5; // Allow a 5-second grace period
                       
                       // Determine row background color based on status
                       let rowBgClass = 'hover:bg-slate-50/50';
