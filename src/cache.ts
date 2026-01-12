@@ -242,7 +242,7 @@ export class CacheManager {
 
   getCacheStats(): { 
     size: number; 
-    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number; pollInterval?: number }>;
+    keys: Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number; pollInterval?: number; ttl: number; staleTime: number }>;
     errorRate: number;
     errorRateByPath: Record<string, number>;
     backoffStates: Record<string, { consecutiveErrors: number; backoffDelayMs: number; nextRetryTime: number }>;
@@ -272,10 +272,12 @@ export class CacheManager {
           misses: stats.misses,
           avgResponseTime,
           maxResponseTime,
-          pollInterval: urlConfig?.pollInterval
+          pollInterval: urlConfig?.pollInterval,
+          ttl: entry.ttl,
+          staleTime: entry.staleTime
         };
         return acc;
-      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number; pollInterval?: number }>),
+      }, {} as Record<string, { lastFetchTime: number; size: number; hits: number; misses: number; avgResponseTime?: number; maxResponseTime?: number; pollInterval?: number; ttl: number; staleTime: number }>),
       errorRate,
       errorRateByPath,
       backoffStates
