@@ -19,6 +19,14 @@ A high-performance Node.js caching proxy for [pypowerwall](https://github.com/ja
 
 ### Using Docker (Recommended)
 
+#### Quick Start
+
+```bash
+docker pull ghcr.io/mccahan/pypowerwall-caching-proxy:latest
+```
+
+#### Building it Yourself
+
 ```bash
 # Build the image
 docker build -t pypowerwall-proxy .
