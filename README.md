@@ -1,4 +1,4 @@
-# pypowerwall-caching-proxy
+# pyPowerwall Caching Proxy
 
 A high-performance Node.js caching proxy for [pypowerwall](https://github.com/jasonacox/pypowerwall) with intelligent request management, scheduled polling, and configurable caching strategies.
 
