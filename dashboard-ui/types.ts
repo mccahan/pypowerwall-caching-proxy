@@ -12,6 +12,8 @@ export interface CacheEntry {
   avgResponseTime?: number;
   maxResponseTime?: number;
   pollInterval?: number;
+  ttl: number;
+  staleTime: number;
 }
 
 export interface CacheStats {

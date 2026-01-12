@@ -9,7 +9,8 @@ import {
   CheckCircle2, 
   XCircle, 
   Search,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from 'lucide-react';
 import { CacheStats, QueueStats, BackoffState, CacheEntry, ActiveRequest } from './types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -342,14 +343,44 @@ const App: React.FC = () => {
                     filteredCacheKeys.map(([key, info]) => {
                       const total = info.hits + info.misses;
                       const hitRate = total > 0 ? (info.hits / total) * 100 : 0;
+                      
+                      // Calculate cache age and determine status
+                      const now = Date.now();
+                      const age = now - info.lastFetchTime;
+                      const isExpired = age >= info.ttl;
+                      const isStale = !isExpired && age >= info.staleTime;
+                      
+                      // Determine row background color based on status
+                      let rowBgClass = 'hover:bg-slate-50/50';
+                      let statusIcon = null;
+                      
+                      if (isExpired) {
+                        rowBgClass = 'bg-red-50/70 hover:bg-red-100/70';
+                        statusIcon = (
+                          <div title="Cache expired - past TTL" className="flex items-center">
+                            <XCircle className="w-4 h-4 text-red-600" />
+                          </div>
+                        );
+                      } else if (isStale) {
+                        rowBgClass = 'bg-amber-50/70 hover:bg-amber-100/70';
+                        statusIcon = (
+                          <div title="Cache stale - needs refresh" className="flex items-center">
+                            <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          </div>
+                        );
+                      }
+                      
                       return (
-                        <tr key={key} className="hover:bg-slate-50/50 transition-colors">
+                        <tr key={key} className={`${rowBgClass} transition-colors`}>
                           <td>
-                            {info.pollInterval && info.pollInterval > 0 && (
-                              <div title={`Auto-polling every ${info.pollInterval}s`}>
-                                <RefreshCcw className="w-[32px] text-emerald-500 pl-4" />
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1 pl-2">
+                              {statusIcon}
+                              {info.pollInterval && info.pollInterval > 0 && (
+                                <div title={`Auto-polling every ${info.pollInterval}s`}>
+                                  <RefreshCcw className="w-4 h-4 text-emerald-500" />
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-6 pl-2 py-4">
                             <div className="flex items-center gap-2">
